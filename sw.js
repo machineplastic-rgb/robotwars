@@ -1,5 +1,5 @@
 // Service worker: el juego funciona sin conexión tras la primera carga.
-const CACHE_NAME = 'robotwars-v2';
+const CACHE_NAME = 'robotwars-v3';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest',
   'js/core.js', 'js/font.js', 'js/audio.js', 'js/robots.js', 'js/stages.js', 'js/fight.js', 'js/menus.js', 'js/main.js',

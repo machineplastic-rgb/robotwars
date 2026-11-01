@@ -257,7 +257,7 @@ window.G = window.G || {};
   const KEY = 'robotwars.save.v1';
   G.save = {
     data: null,
-    defaults() { return { beaten: {}, best: 0, villain: 0, settings: { music: 1, sfx: 1, vib: 1 } }; },
+    defaults() { return { beaten: {}, best: 0, villain: 0, dif: 0, settings: { music: 1, sfx: 1, vib: 1 } }; },
     load() {
       let d = null;
       try { d = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { d = null; }
@@ -267,6 +267,7 @@ window.G = window.G || {};
       d.beaten = d.beaten || {};
       d.best = d.best || 0;
       d.villain = G.clamp(d.villain || 0, 0, 3);
+      d.dif = G.clamp(d.dif || 0, 0, 2);
       this.data = d;
     },
     write() { try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch (e) { } },

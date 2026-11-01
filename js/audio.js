@@ -74,6 +74,7 @@
     boom(t) { noise(t, 0.9, 0.85, 'lowpass', 2600, 55); osc('sine', 72, 20, t, 0.75, 0.85); },
     shot(t) { osc('square', 680, 90, t, 0.12, 0.16); noise(t, 0.16, 0.45, 'lowpass', 3000, 300); osc('sine', 120, 40, t, 0.15, 0.5); },
     missile(t) { osc('sawtooth', 260, 900, t, 0.3, 0.08); noise(t, 0.32, 0.22, 'bandpass', 2200, 600, 2); },
+    laser(t) { osc('square', 1500, 280, t, 0.18, 0.07); osc('sawtooth', 900, 180, t, 0.18, 0.045); },
     gun(t) { for (let i = 0; i < 3; i++) { noise(t + i * 0.065, 0.045, 0.22, 'highpass', 2600); osc('square', 300, 120, t + i * 0.065, 0.03, 0.05); } },
     xform(t) {
       [0, 4, 7, 12, 16, 19].forEach((s, i) => { osc('square', 196 * Math.pow(2, s / 12), null, t + i * 0.045, 0.07, 0.09); noise(t + i * 0.045, 0.025, 0.25, 'highpass', 3500); });

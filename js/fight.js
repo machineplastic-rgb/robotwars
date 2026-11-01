@@ -85,20 +85,20 @@
   }
 
   // ---------- robots ----------
-  function mkRobot(id, side, x, y, face, lvl) {
+  function mkRobot(id, side, x, y, face, lvl, dif) {
     const sp = G.ROB[id], st = sp.stats;
-    const hpMul = side === 'v' ? 1 : (0.9 + 0.1 * lvl) * (sp.boss ? 1.2 : 1);
+    const hpMul = side === 'v' ? 1.3 : (0.55 + 0.06 * lvl) * (sp.boss ? 1.15 : 1) * [0.8, 1, 1.25][dif || 0];
     const max = Math.round(1000 * hpMul);
     return {
       id, sp, side, x, y, z: 0, vx: 0, vy: 0, vz: 0, face, hp: max, max, shadowHp: max, rep: 35,
       mode: 'robot', state: 'idle', st: 0, anim: 0, combo: 0, queued: false, hitDone: false, hitFlash: 0, invul: 0, lastHurt: 9,
-      fly: 2 + st.fly * 0.8, flyMax: 2 + st.fly * 0.8, flying: false, cool: 0, healT: 0,
-      ctrl: { mx: 0, my: 0, golpe: false, salto: false, volar: false, transf: false },
+      fly: 5 + st.fly, flyMax: 5 + st.fly, flying: false, cool: 0, healT: 0,
+      ctrl: { mx: 0, my: 0, golpe: false, disparar: false, salto: false, volar: false, transf: false },
       ai: { t: 0.5, plan: 'approach', dur: 0, sdir: 1 },
     };
   }
-  const walkSpd = (r) => 52 + r.sp.stats.spd * 11;
-  const VEHSPD = { tanque: 82, camion: 112, coche: 150, avion: 132 };
+  const walkSpd = (r) => (r.side === 'v' ? 100 : 70) + r.sp.stats.spd * 12;
+  const VEHSPD = { tanque: 115, camion: 145, coche: 185, avion: 165 };
   const strMul = (r) => 0.75 + r.sp.stats.str * 0.1;
 
   // ---------- partículas ----------
@@ -157,8 +157,8 @@
   function hurt(att, def, dmg, heavy, px, pz) {
     if (!def || def.invul > 0 || def.state === 'down' || def.state === 'ko' || def.state === 'getup' || S.phase !== 'fight') return false;
     let d = dmg * (1.25 - def.sp.stats.def * 0.08);
-    if (att && att.side === 'h') d *= 0.72 + S.level * 0.07;
-    if (att && att.side === 'v') d *= 1;
+    if (att && att.side === 'h') d *= (0.4 + S.level * 0.05) * [0.7, 1, 1.35][S.dif];
+    if (att && att.side === 'v') d *= 1.25;
     def.hp -= d; def.lastHurt = 0; def.hitFlash = 0.12;
     if (att && att.side === 'v') addScore(Math.round(d), undefined);
     const kdir = att ? G.sign(def.x - att.x) : -def.face;
@@ -194,12 +194,13 @@
 
   // ---------- proyectiles ----------
   function shoot(owner, kind, x, y, z, face, extra) {
-    const spd = kind === 'shell' ? 300 : kind === 'missile' ? 250 : kind === 'bullet' ? 330 : 280;
-    const dmg = kind === 'shell' ? 62 : kind === 'missile' ? 34 : kind === 'bullet' ? 9 : 26;
-    S.proj.push(Object.assign({ owner, kind, x, y, z, vx: face * spd, vy: 0, vz: 0, face, dmg, t: 0, life: 2.2 }, extra || {}));
+    const spd = kind === 'shell' ? 300 : kind === 'missile' ? 250 : kind === 'bullet' ? 330 : kind === 'beam' ? 360 : 280;
+    const dmg = kind === 'shell' ? 62 : kind === 'missile' ? 34 : kind === 'bullet' ? 9 : kind === 'beam' ? 32 : 26;
+    const k = owner === 'p' ? 1 : 0.6; // los disparos enemigos van más lentos: se pueden esquivar
+    S.proj.push(Object.assign({ owner, kind, x, y, z, vx: face * spd * k, vy: 0, vz: 0, face, dmg, t: 0, life: owner === 'p' ? 2.2 : 3.2 }, extra || {}));
   }
   function explode(p, x, y, z) {
-    boom(x, y, z, p.kind === 'bullet' ? 5 : p.kind === 'missile' ? 10 : 13);
+    boom(x, y, z, p.kind === 'bullet' ? 5 : p.kind === 'beam' ? 8 : p.kind === 'missile' ? 10 : 13);
     G.audio.sfx(p.kind === 'bullet' ? 'crunch' : 'boom');
     if (p.kind !== 'bullet') { areaObj(x, y, p.kind === 'shell' ? 22 : 16, p.kind === 'shell' ? 70 : 45, { explosive: true }); G.shake(4); }
   }
@@ -207,6 +208,7 @@
     for (const p of S.proj) {
       p.t += dt;
       if (p.kind === 'missile' && p.target) { p.vy = G.clamp((p.target.y - p.y) * 3, -60, 60); p.vz = G.clamp((p.target.z + 50 - p.z) * 2, -80, 80); if (p.t % 0.06 < dt) smoke(p.x - p.face * 6, p.y, p.z, 3, 0, 0.6); }
+      if (p.kind === 'beam' && p.owner === 'p' && p.target) { p.vy = G.clamp((p.target.y - p.y) * 5, -90, 90); p.vz = G.clamp((p.target.z + 60 - p.z) * 3, -140, 140); }
       if (p.kind === 'bomb') p.vz -= 400 * dt;
       p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
       if (p.t > p.life || p.x < -20 || p.x > AW + 20) { p.dead = true; continue; }
@@ -216,7 +218,7 @@
         if (Math.abs(t.x - p.x) < 18 && Math.abs(t.y - p.y) < 15 && p.z >= t.z - 4 && p.z <= t.z + (t.mode === 'veh' ? 34 : 100)) {
           if (t.state !== 'ko' && t.state !== 'down' && t.invul <= 0) {
             const att = p.owner === 'p' ? S.p : p.owner === 'e' ? S.e : null;
-            hurt(att, t, p.owner === 'army' ? p.dmg * (0.8 + S.level * 0.1) : p.dmg * (att ? strMul(att) : 1), p.kind === 'shell', p.x, p.z);
+            hurt(att, t, p.owner === 'army' ? p.dmg * (0.45 + S.level * 0.05) : p.dmg * (att ? strMul(att) : 1), p.kind === 'shell', p.x, p.z);
             p.dead = true; explode(p, p.x, p.y, p.z); break;
           }
         }
@@ -249,8 +251,8 @@
   function updArmy(dt) {
     if (S.phase !== 'fight') return;
     S.armyT -= dt;
-    const maxU = 1 + Math.ceil(S.level / 2);
-    if (S.armyT <= 0) { S.armyT = G.rand(8, 12) - S.level * 0.6; if (S.army.filter((u) => !u.dead).length < maxU) spawnUnit(); }
+    const maxU = 1 + Math.floor(S.level / 3);
+    if (S.armyT <= 0) { S.armyT = G.rand(11, 15) - S.level * 0.5; if (S.army.filter((u) => !u.dead).length < maxU) spawnUnit(); }
     const p = S.p;
     for (const u of S.army) {
       if (u.dead) continue;
@@ -265,8 +267,8 @@
       u.fire -= dt;
       if (u.fire <= 0 && Math.abs(dx) < 240 && p.state !== 'ko') {
         u.fire = G.rand(2.2, 3.2) - S.level * 0.12;
-        if (u.kind === 'tank') { shoot('army', 'shell', u.x + u.face * 18, u.y, 12, u.face, { dmg: 22, vz: ((p.z + 50) - 12) / (Math.abs(dx) / 300 + 0.01) * 0.9 }); spark(u.x + u.face * 22, u.y, 12, 4); G.audio.sfx('shot'); }
-        else { for (let i = 0; i < 3; i++) shoot('army', 'bullet', u.x + u.face * 12, u.y, u.z - 2, u.face, { dmg: 7, t: -i * 0.07, vz: ((p.z + 50) - u.z) / (Math.abs(dx) / 330 + 0.01) }); G.audio.sfx('gun'); }
+        if (u.kind === 'tank') { shoot('army', 'shell', u.x + u.face * 18, u.y, 14, u.face, { dmg: 22 }); spark(u.x + u.face * 22, u.y, 14, 4); G.audio.sfx('shot'); }
+        else { for (let i = 0; i < 3; i++) shoot('army', 'bullet', u.x + u.face * 12, u.y, u.z - 2, u.face, { dmg: 7, t: -i * 0.1, vz: ((p.z + 50) - u.z) / (Math.abs(dx) / 198 + 0.01) }); G.audio.sfx('gun'); }
       }
       // aplastar tanques al pisarlos
       if (u.kind === 'tank' && p.z < 8 && Math.abs(u.x - p.x) < 20 && Math.abs(u.y - p.y) < 8) killUnit(u);
@@ -277,11 +279,13 @@
   // ---------- control ----------
   function aiCtrl(r, o, dt) {
     const c = r.ctrl, ai = r.ai, lvl = S.level;
-    c.golpe = c.salto = c.volar = c.transf = false;
+    c.golpe = c.disparar = c.salto = c.volar = c.transf = false;
     if (S.phase !== 'fight' || ['hit', 'down', 'ko', 'getup', 'xform'].includes(r.state)) { c.mx = c.my = 0; return; }
     const dx = o.x - r.x, dy = o.y - r.y, adx = Math.abs(dx), ady = Math.abs(dy);
-    const aggr = Math.min(0.85, 0.3 + lvl * 0.09);
-    const react = Math.max(0.14, 0.46 - lvl * 0.05);
+    // dificultad: 0 fácil, 1 normal, 2 difícil (el rival); el jugador automático juega fuerte
+    const hero = r.side === 'h', dif = S.dif;
+    const aggr = hero ? Math.min(0.75, [0.1, 0.22, 0.38][dif] + lvl * 0.04) : 0.7;
+    const react = hero ? Math.max(0.2, [1.0, 0.7, 0.45][dif] - lvl * 0.04) : 0.2;
     ai.t -= dt; ai.dur -= dt;
     if (ai.t <= 0 && ai.plan !== 'vehicle') {
       ai.t = react * (0.7 + Math.random() * 0.6);
@@ -289,12 +293,13 @@
       if (r.mode === 'veh') ai.plan = 'vehicle';
       else if (o.state === 'down' || o.state === 'getup') ai.plan = adx < 70 ? 'backoff' : 'wait';
       else if (r.hp < r.max * 0.3 && r.rep > 25 && roll < 0.35) { ai.plan = 'retreat'; ai.dur = 2.2; }
-      else if (o.flying && !r.flying && r.fly > 1.5 && roll < 0.45) ai.plan = 'fly';
-      else if (adx > 150 && roll < 0.3) ai.plan = 'transform';
+      else if (o.flying && !r.flying && r.fly > 2 && roll < 0.35) ai.plan = 'fly';
+      else if (adx > 150 && roll < 0.2) ai.plan = 'transform';
+      else if (adx > 80 && ady < 16 && roll < aggr * 0.8) ai.plan = 'shoot';
       else if (adx < 60 && ady < 14 && roll < aggr) ai.plan = 'attack';
-      else if (adx < 110 && adx > 40 && roll < 0.16 + lvl * 0.02) ai.plan = 'jumpatk';
-      else if (roll < 0.1) { ai.plan = 'sidestep'; ai.dur = 0.5; ai.sdir = Math.random() < 0.5 ? -1 : 1; }
-      else if (r.flying && (r.fly < 0.8 || !o.flying)) ai.plan = 'land';
+      else if (roll < 0.12) { ai.plan = 'sidestep'; ai.dur = 0.5; ai.sdir = Math.random() < 0.5 ? -1 : 1; }
+      else if (r.flying && (r.fly < 1 || !o.flying)) ai.plan = 'land';
+      else if (hero && roll < [0.5, 0.3, 0.12][dif]) { ai.plan = 'wait'; ai.t *= 1.5; }
       else ai.plan = 'approach';
     }
     c.mx = 0; c.my = 0;
@@ -303,23 +308,23 @@
       case 'attack':
         c.my = ady > 5 ? G.sign(dy) : 0;
         if (adx > 62) { ai.plan = 'approach'; break; }
-        if (r.state !== 'atk' && adx < 58 && ady < 14 && Math.random() < 0.25 + aggr * 0.5) c.golpe = true;
-        else if (r.state === 'atk' && Math.random() < aggr * 0.35) c.golpe = true;
+        if (r.state !== 'atk' && adx < 58 && ady < 14 && Math.random() < 0.08 + aggr * 0.4) c.golpe = true;
+        else if (r.state === 'atk' && Math.random() < aggr * 0.25) c.golpe = true;
         break;
       case 'backoff': c.mx = -G.sign(dx); break;
       case 'wait': break;
       case 'retreat': c.mx = -G.sign(dx); c.my = G.sign(230 - r.y) * 0.5; if (ai.dur <= 0) ai.plan = 'approach'; break;
       case 'sidestep': c.my = ai.sdir; if (ai.dur <= 0) ai.plan = 'approach'; break;
-      case 'jumpatk':
-        c.mx = G.sign(dx); c.my = ady > 5 ? G.sign(dy) : 0;
-        if (r.state === 'idle' || r.state === 'walk') { if (r.flying) ai.plan = 'approach'; else c.salto = true; }
-        else if (r.state === 'jump' && r.vz < 80) { c.golpe = true; ai.plan = 'approach'; }
+      case 'shoot':
+        c.my = ady > 4 ? G.sign(dy) : 0;
+        if (r.cool <= 0 && ady < 14 && (r.state === 'idle' || r.state === 'walk')) { c.disparar = true; ai.plan = 'wait'; ai.t = react * 1.5; }
         break;
       case 'fly':
         if (!r.flying) { c.volar = true; break; }
-        c.mx = adx > 40 ? G.sign(dx) : 0; c.my = ady > 5 ? G.sign(dy) : 0;
-        if (adx < 70 && ady < 14 && Math.random() < 0.08 + aggr * 0.1) c.golpe = true;
-        if (r.fly < 0.7) { c.volar = true; ai.plan = 'approach'; }
+        c.mx = adx > 30 ? G.sign(dx) : 0; c.my = ady > 5 ? G.sign(dy) : 0;
+        if (adx < 50 && ady < 14 && Math.random() < 0.03 + aggr * 0.05) c.golpe = true;
+        else if (adx > 70 && ady < 14 && r.cool <= 0 && Math.random() < aggr * 0.05) c.disparar = true;
+        if (r.fly < 1) { c.volar = true; ai.plan = 'approach'; }
         break;
       case 'land': if (r.flying) c.volar = true; ai.plan = 'approach'; break;
       case 'transform': c.transf = true; ai.plan = 'vehicle'; ai.dur = 3 + Math.random() * 3; break;
@@ -329,11 +334,11 @@
         c.my = ady > 4 ? G.sign(dy) : 0;
         if (v === 'tanque' || v === 'avion') {
           if (adx < 90) c.mx = -G.sign(dx); else if (adx > 210) c.mx = G.sign(dx); else c.mx = (r.face === G.sign(dx)) ? 0 : G.sign(dx);
-          if (ady < 12 && r.face === G.sign(dx) && r.cool <= 0 && Math.random() < 0.3) c.golpe = true;
+          if (ady < 12 && r.face === G.sign(dx) && r.cool <= 0 && Math.random() < 0.1 + aggr * 0.2) c.disparar = true;
         } else {
           c.mx = r.face === G.sign(dx) ? 0 : G.sign(dx);
           if (adx > 230) c.mx = G.sign(dx);
-          if (ady < 10 && adx < 240 && r.face === G.sign(dx) && r.state !== 'ram' && Math.random() < 0.2) c.golpe = true;
+          if (ady < 10 && adx < 240 && r.face === G.sign(dx) && r.state !== 'ram' && Math.random() < 0.05 + aggr * 0.15) c.golpe = true;
         }
         if (ai.dur <= 0 && r.state !== 'ram') { c.transf = true; ai.plan = 'approach'; ai.t = 0.4; }
         break;
@@ -347,14 +352,15 @@
     let mx = 0, my = 0;
     if (C.joy) {
       const dx = C.joy.x - C.joy.bx, dy = C.joy.y - C.joy.by, d = Math.hypot(dx, dy), rad = C.jr;
-      if (d > rad * 0.22) { const k = Math.min(1, d / rad); mx = (dx / d) * k; my = (dy / d) * k; }
+      if (d > rad * 0.18) { const k = Math.min(1, d / (rad * 0.55)); mx = (dx / d) * k; my = (dy / d) * k; }
     }
     if (K(['ArrowLeft', 'KeyA'])) mx = -1; if (K(['ArrowRight', 'KeyD'])) mx = 1;
     if (K(['ArrowUp', 'KeyW'])) my = -1; if (K(['ArrowDown', 'KeyS'])) my = 1;
-    c.mx = Math.abs(mx) > 0.25 ? mx : 0; c.my = Math.abs(my) > 0.25 ? my : 0;
+    c.mx = Math.abs(mx) > 0.2 ? mx : 0; c.my = Math.abs(my) > 0.2 ? my : 0;
     const B = C.btn;
     c.golpe = B.golpe.pressed || KP(['KeyJ', 'KeyZ', 'Space']);
-    c.salto = B.salto.pressed || KP(['KeyK', 'KeyX']);
+    c.disparar = B.disparar.pressed || KP(['KeyK', 'KeyX']);
+    c.salto = false;
     c.volar = B.volar.pressed || KP(['KeyL', 'KeyC']);
     c.transf = B.transf.pressed || KP(['KeyI', 'KeyV', 'ShiftLeft', 'ShiftRight']);
     for (const k in B) B[k].pressed = false;
@@ -369,9 +375,10 @@
     const c = r.ctrl, alive = r.state !== 'ko';
     // autorreparación
     if (alive && S.phase === 'fight') {
-      r.rep = Math.min(100, r.rep + dt * (r.side === 'v' ? 3.2 : 2.6 + S.level * 0.2));
-      if (r.lastHurt > 2.4 && r.hp < r.max && r.rep > 0.5 && r.state !== 'down') {
-        r.hp = Math.min(r.max, r.hp + dt * r.max * 0.035); r.rep = Math.max(0, r.rep - dt * 15);
+      const pv = r.side === 'v';
+      r.rep = Math.min(100, r.rep + dt * (pv ? 5 : 2 + S.level * 0.15 + S.dif * 0.5));
+      if (r.lastHurt > (pv ? 1.6 : 2.6) && r.hp < r.max && r.rep > 0.5 && r.state !== 'down') {
+        r.hp = Math.min(r.max, r.hp + dt * r.max * (pv ? 0.05 : 0.03)); r.rep = Math.max(0, r.rep - dt * 14);
         r.healT -= dt; if (r.healT <= 0) { r.healT = 0.18; addP('heal', r.x + G.rand(-22, 22), r.y + 1, r.z + G.rand(20, 90), { vz: 28, life: 0.7 }); if (Math.random() < 0.3) G.audio.sfx('heal'); }
       }
     }
@@ -382,18 +389,24 @@
 
     if (free && canAct) {
       if (c.transf && r.state !== 'xform') { startState(r, 'xform'); r.flying = false; G.audio.sfx(veh ? 'xback' : 'xform'); dust(r.x, r.y, 26); return integrate(r, o, dt); }
+      const who = r === S.p ? 'p' : 'e';
       if (!veh) {
         if (c.volar) {
           if (r.flying) r.flying = false;
-          else if (r.fly > 0.6) { r.flying = true; G.audio.sfx('fly'); dust(r.x, r.y, 24); }
+          else if (r.fly > 1) { r.flying = true; G.audio.sfx('fly'); dust(r.x, r.y, 24); }
         }
-        if (c.golpe) { if (r.flying || r.z > 20) { startState(r, 'flyatk'); r.fly -= 0.4; } else { r.combo = 0; startState(r, 'atk'); } }
-        else if (c.salto && !r.flying && r.z < 2) { startState(r, 'jump'); r.vz = 285; G.audio.sfx('jump'); dust(r.x, r.y, 18); }
+        if (c.golpe) {
+          if (r.flying && r.z > 30) { startState(r, 'fdive'); r.flying = false; r.vz = -60; G.audio.sfx('whoosh'); }
+          else { r.combo = 0; startState(r, 'atk'); }
+        } else if (c.disparar && r.cool <= 0) { startState(r, 'shoot'); r.cool = 0.5; }
       } else {
         const v = r.sp.veh;
-        if (c.golpe && r.cool <= 0) {
-          if (v === 'tanque') { shoot(r === S.p ? 'p' : 'e', 'shell', r.x + r.face * 46, r.y, 30, r.face); spark(r.x + r.face * 50, r.y, 30, 6); r.cool = 0.75; G.audio.sfx('shot'); r.vx = -r.face * 40; }
-          else if (v === 'avion') { for (const k of [0, 1]) shoot(r === S.p ? 'p' : 'e', 'missile', r.x + r.face * 20, r.y + (k ? 4 : -4), r.z + 8, r.face, { target: o, t: -k * 0.08 }); r.cool = 0.9; G.audio.sfx('missile'); }
+        const missiles = () => { for (const k of [0, 1]) shoot(who, 'missile', r.x + r.face * 20, r.y + (k ? 4 : -4), r.z + 10, r.face, { target: o, t: -k * 0.08 }); r.cool = 0.9; G.audio.sfx('missile'); };
+        if (c.disparar && r.cool <= 0) {
+          if (v === 'tanque' || v === 'camion') { shoot(who, 'shell', r.x + r.face * 46, r.y, v === 'tanque' ? 30 : 24, r.face); spark(r.x + r.face * 50, r.y, 30, 6); r.cool = 0.7; G.audio.sfx('shot'); r.vx = -r.face * 40; }
+          else missiles();
+        } else if (c.golpe && r.cool <= 0) {
+          if (v === 'avion') missiles();
           else { startState(r, 'ram'); r.cool = 1.0; G.audio.sfx('whoosh'); }
         }
       }
@@ -402,11 +415,11 @@
       case 'idle': case 'walk': {
         let mx = canAct ? c.mx : 0, my = canAct ? c.my : 0;
         const spd = veh ? VEHSPD[r.sp.veh] : walkSpd(r) * (r.flying ? 1.25 : 1);
-        r.vx = mx * spd; r.vy = my * spd * 0.62;
+        r.vx = mx * spd; r.vy = my * spd * 0.75;
         r.state = (mx || my) ? 'walk' : 'idle';
         if (veh) { if (mx) r.face = G.sign(mx); }
         else r.face = G.sign(o.x - r.x) || r.face;
-        const tz = veh ? (r.sp.veh === 'avion' ? 46 : 0) : (r.flying ? 54 + Math.sin(r.anim * 3) * 3 : 0);
+        const tz = veh ? (r.sp.veh === 'avion' ? 46 : 0) : (r.flying ? 72 + Math.sin(r.anim * 3) * 3 : 0);
         if (r.z !== tz) { r.z += (tz - r.z) * Math.min(1, dt * 6); if (Math.abs(r.z - tz) < 0.5) { if (tz === 0 && r.z > 2) land(r, false); r.z = tz; } }
         if (!veh && !r.flying && r.state === 'walk') { r.stepT = (r.stepT || 0) - dt; if (r.stepT <= 0) { r.stepT = 0.34; G.audio.sfx('step'); if (Math.random() < 0.5) smoke(r.x + G.rand(-10, 10), r.y + 1, 0, 3, DUSTC[S.st.id] || 2, 0.6); } }
         break;
@@ -437,11 +450,21 @@
         if (r.st > 0.06 && !r.hitDone) for (const u of S.army) if (!u.dead && u.kind === 'heli' && Math.abs(u.x - r.x) < 40 && Math.abs(u.y - r.y) < 18 && Math.abs(u.z - (r.z + 40)) < 50) killUnit(u);
         if (r.st > 0.34) { startState(r, 'idle'); if (r.fly <= 0.2) r.flying = false; }
         break;
+      case 'shoot':
+        r.vx *= 0.7; r.vy *= 0.7;
+        if (!r.hitDone && r.st > 0.06) { r.hitDone = true; shoot(r === S.p ? 'p' : 'e', 'beam', r.x + r.face * 30, r.y, r.z + 66, r.face, { target: o, col: r.sp.acc }); G.audio.sfx('laser'); }
+        if (r.st > 0.22) startState(r, 'idle');
+        break;
+      case 'fdive':
+        r.vx = r.face * 170; r.vy = (canAct ? c.my : 0) * 40;
+        if (!r.hitDone && inReach(r, o, 52, 18, 70)) { r.hitDone = true; hurt(r, o, 70 * strMul(r), true, r.x + r.face * 30, r.z + 40); }
+        break;
       case 'ram': {
-        const sp = r.sp.veh === 'camion' ? 250 : 310;
+        const v = r.sp.veh;
+        const sp = v === 'camion' ? 250 : v === 'tanque' ? 200 : 310;
         r.vx = r.face * sp; r.vy = (canAct ? c.my : 0) * 30;
-        if (!r.hitDone && Math.abs(o.x - r.x) < 44 && Math.abs(o.y - r.y) < 14 && o.z < 40) { r.hitDone = true; hurt(r, o, (r.sp.veh === 'camion' ? 84 : 66) * strMul(r), true, r.x + r.face * 30, 26); }
-        if (r.st > (r.sp.veh === 'camion' ? 0.45 : 0.36)) startState(r, 'idle');
+        if (!r.hitDone && Math.abs(o.x - r.x) < 44 && Math.abs(o.y - r.y) < 14 && o.z < 40) { r.hitDone = true; hurt(r, o, (v === 'coche' ? 66 : 84) * strMul(r), true, r.x + r.face * 30, 26); }
+        if (r.st > (v === 'coche' ? 0.36 : 0.45)) startState(r, 'idle');
         break;
       }
       case 'xform':
@@ -461,16 +484,21 @@
   }
   function land(r, big) {
     dust(r.x, r.y, big ? 40 : 26); G.audio.sfx('land'); G.shake(big ? 6 : 3);
+    if (big) {
+      dust(r.x, r.y, 64);
+      const o = r === S.p ? S.e : S.p;
+      if (!r.hitDone && Math.abs(o.x - r.x) < 58 && Math.abs(o.y - r.y) < 24 && o.z < 24) hurt(r, o, 50 * strMul(r), true, o.x, 30);
+    }
     areaObj(r.x, r.y, big ? 32 : 20, big ? 110 : 45, r);
     if (r.side === 'v') for (const u of S.army) if (!u.dead && u.kind === 'tank' && Math.abs(u.x - r.x) < (big ? 40 : 26) && Math.abs(u.y - r.y) < 14) killUnit(u);
   }
   function integrate(r, o, dt) {
-    const airborne = r.state === 'jump' || r.state === 'dive' || ((r.state === 'down' || r.state === 'ko') && (r.z > 0 || r.vz > 0));
+    const airborne = r.state === 'jump' || r.state === 'dive' || r.state === 'fdive' || ((r.state === 'down' || r.state === 'ko') && (r.z > 0 || r.vz > 0));
     if (airborne) {
       r.vz -= 760 * dt; r.z += r.vz * dt;
       if (r.z <= 0) {
         r.z = 0;
-        if (r.state === 'jump' || r.state === 'dive') { const big = r.state === 'dive'; land(r, big); r.vz = 0; startState(r, big ? 'getup' : 'idle'); if (big) r.st = 0.1; }
+        if (r.state === 'jump' || r.state === 'dive' || r.state === 'fdive') { const big = r.state !== 'jump'; land(r, big); r.vz = 0; startState(r, big ? 'getup' : 'idle'); if (big) r.st = 0.1; }
         else if (r.vz < -100) { r.vz = -r.vz * 0.25; dust(r.x, r.y, 34); G.audio.sfx('land'); G.shake(5); areaObj(r.x, r.y, 30, 120, r); }
         else r.vz = 0;
       }
@@ -522,12 +550,12 @@
     S = {
       stageIdx: p.stage, st: B.st, bg: B.bg, objs: B.objs, level: p.level || 1, vid: v, hid: h,
       army: [], proj: [], parts: [], time: 99, phase: 'intro', phaseT: 0, score: p.score || 0, destroyed: 0,
-      totalWt: B.objs.filter((o) => !o.front && !o.nohit).reduce((a, o) => a + o.wt, 0), hitstop: 0, slow: 1, armyT: 6, paused: false, auto: G.params.get('auto') === '1',
+      totalWt: B.objs.filter((o) => !o.front && !o.nohit).reduce((a, o) => a + o.wt, 0), hitstop: 0, slow: 1, armyT: 10, paused: false, dif: G.clamp(G.save.data.dif || 0, 0, 2), auto: G.params.get('auto') === '1',
       cam: { x: AW / 2 - G.W / 2, y: 0 }, ctl: { joy: null, jr: 26, btn: {} }, t: 0,
     };
     S.goalWt = S.totalWt * 0.6;
-    S.p = mkRobot(v, 'v', G.SPAWN.v.x, G.SPAWN.v.y, 1, S.level);
-    S.e = mkRobot(h, 'h', G.SPAWN.h.x, G.SPAWN.h.y, -1, S.level);
+    S.p = mkRobot(v, 'v', G.SPAWN.v.x, G.SPAWN.v.y, 1, S.level, S.dif);
+    S.e = mkRobot(h, 'h', G.SPAWN.h.x, G.SPAWN.h.y, -1, S.level, S.dif);
     layoutControls();
     snapCam();
     G.audio.play(B.st.music);
@@ -536,13 +564,13 @@
   function layoutControls() {
     const W = G.W, H = G.H, C = S.ctl;
     const sr = W - G.safeR - 8, sb = H - G.safeB - 6;
-    const cx = sr - 48, cy = sb - 52;
-    const d = 34;
+    const cx = sr - 62, cy = sb - 60;
+    const d = 38;
     C.btn = {
-      transf: { x: cx, y: cy - d, r: 16, label: 'TRANSF.', c: '#d9a21b', d: '#8a6408' },
-      volar: { x: cx - d, y: cy, r: 16, label: 'VOLAR', c: '#3fa45a', d: '#1e6a34' },
-      salto: { x: cx + d, y: cy, r: 16, label: 'SALTO', c: '#3d7fd0', d: '#1e4a8a' },
-      golpe: { x: cx, y: cy + d, r: 19, label: 'GOLPE', c: '#cf3a3a', d: '#8a1a1a' },
+      transf: { x: cx, y: cy - d, r: 18, label: 'TRANSF.', c: '#d9a21b', d: '#8a6408' },
+      volar: { x: cx - d, y: cy, r: 18, label: 'VOLAR', c: '#3fa45a', d: '#1e6a34' },
+      disparar: { x: cx + d, y: cy, r: 18, label: 'DISPARAR', c: '#3d7fd0', d: '#1e4a8a' },
+      golpe: { x: cx, y: cy + d, r: 21, label: 'GOLPE', c: '#cf3a3a', d: '#8a1a1a' },
     };
     for (const k in C.btn) Object.assign(C.btn[k], { id: null, pressed: false, held: false });
     C.jhome = { x: G.safeL + 46, y: sb - 42 };
@@ -670,7 +698,8 @@
       case 'walk': fr = veh ? 'veh' + (Math.floor(r.anim * 10) % 2) : (r.flying ? 'fly' : ['walk0', 'walk1', 'walk2', 'walk1'][Math.floor(r.anim * 7) % 4]); break;
       case 'atk': fr = r.st < 0.08 ? 'wind' : (r.combo === 2 ? 'upper' : 'punch'); break;
       case 'jump': fr = 'jump'; break;
-      case 'dive': fr = 'dive'; break;
+      case 'dive': case 'fdive': fr = 'dive'; break;
+      case 'shoot': fr = 'punch'; break;
       case 'flyatk': fr = 'flyp'; break;
       case 'ram': fr = 'veh' + flyAnim; break;
       case 'xform': fr = Math.floor(r.st * 22) % 2 ? 'crouch' : 'veh0'; if (r.mode === 'veh') fr = Math.floor(r.st * 22) % 2 ? 'veh0' : 'crouch'; break;
@@ -700,7 +729,14 @@
   function drawProj(p, cx, cy) {
     const sx = Math.round(p.x - cx), sy = Math.round(p.y - cy - p.z), gy = Math.round(p.y - cy);
     if (p.t < 0) return;
-    if (p.kind === 'bullet') { R(sx - 2, sy, 4, 1, '#fff3a0'); return; }
+    if (p.kind === 'bullet') { R(sx - 2, sy - 1, 5, 3, OUT); R(sx - 1, sy, 3, 1, '#fff3a0'); return; }
+    if (p.kind === 'beam') {
+      const c = p.col || { d: '#3fae12', b: '#8cff3c', l: '#d2ffa8' };
+      ell(sx, gy, 4, 1, '#000', 0.25);
+      A(sx - p.face * 18 - 7, sy - 1, 14, 3, c.b, 0.35);
+      R(sx - 9, sy - 2, 18, 5, c.d); R(sx - 8, sy - 1, 16, 3, c.b); R(sx - 6, sy, 12, 1, '#ffffff');
+      return;
+    }
     ell(sx, gy, 3, 1, '#000', 0.25);
     if (p.kind === 'shell') { R(sx - 3, sy - 1, 6, 3, OUT); R(sx - 2, sy, 4, 1, '#ffe266'); A(sx - p.face * 10 - 4, sy, 10, 1, '#ffffff', 0.5); }
     else { R(sx - 4, sy - 1, 9, 3, OUT); R(sx - 3, sy, 7, 1, '#e8e8f0'); Px(sx + p.face * 4, sy, '#e03a2a'); drawFlame(sx - p.face * 6, sy + 2, 2, Math.floor(p.t * 20)); }
@@ -798,6 +834,12 @@
       ell(b.x - b.r * 0.3, b.y + pr - b.r * 0.35, b.r * 0.45, b.r * 0.3, '#ffffff', 0.3);
       G.ring(b.x, b.y + pr, b.r, '#ffffff', 0.7);
       G.text(b.label, b.x, b.y - 3 + pr, { c: '#ffffff', o: '#00000099', al: 'c' });
+    }
+    // energía de vuelo alrededor del botón VOLAR
+    const vb = C.btn.volar, fr = G.clamp(S.p.fly / S.p.flyMax, 0, 1);
+    for (let i = 0; i < 72 * fr; i++) {
+      const an = -Math.PI / 2 + (i / 72) * Math.PI * 2;
+      for (const rr of [vb.r + 2, vb.r + 3]) G.Px(vb.x + Math.cos(an) * rr, vb.y + Math.sin(an) * rr, S.p.flying ? '#bff8ff' : '#7ec8ff');
     }
     X.globalAlpha = 1;
   }

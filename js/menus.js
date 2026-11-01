@@ -104,15 +104,22 @@
   const MAP = G.scenes.map = {};
   MAP.enter = function () { G.audio.play('select'); MAP.thumbs = G.STAGES.map((s, i) => G.stageThumb(i)); };
   function tiles() {
-    const W = G.W, H = G.H, gap = 6, x0 = G.safeL + 8, x1 = W - G.safeR - 8, top = 30, bottom = H - 6 - G.safeB;
+    const W = G.W, H = G.H, gap = 6, x0 = G.safeL + 8, x1 = W - G.safeR - 8, top = 28, bottom = H - 30 - G.safeB;
     const tw = Math.floor((x1 - x0 - gap * 2) / 3);
     const th = Math.min(Math.floor((bottom - top - gap) / 2) - 20, Math.floor(tw * 0.5));
     const rowH = th + 22;
     const oy = top + Math.max(0, Math.floor((bottom - top - rowH * 2 - gap) / 2));
     return G.STAGES.map((s, i) => ({ x: x0 + (i % 3) * (tw + gap), y: oy + Math.floor(i / 3) * (rowH + gap), w: tw, h: th, i, s }));
   }
+  const DIFS = ['FÁCIL', 'NORMAL', 'DIFÍCIL'];
+  function difBtns() {
+    const W = G.W, H = G.H, bw = 58, gap = 6, lw = 54;
+    const x0 = Math.round(W / 2 - (lw + bw * 3 + gap * 2) / 2) + lw;
+    return DIFS.map((label, i) => ({ i, label, x: x0 + i * (bw + gap), y: H - 24 - G.safeB, w: bw, h: 17 }));
+  }
   MAP.down = function (id, x, y) {
     if (G.inRect(x, y, backBtn(), 4)) { G.audio.sfx('back'); G.go('select'); return; }
+    for (const b of difBtns()) if (G.inRect(x, y, b, 3)) { G.save.data.dif = b.i; G.save.write(); G.audio.sfx('sel'); return; }
     for (const tl of tiles()) if (G.inRect(x, y, { x: tl.x, y: tl.y, w: tl.w, h: tl.h + 20 })) { startRun(tl.i); return; }
   };
   MAP.key = function (k) { if (k === 'Escape') G.go('select'); if (k === 'Enter') startRun(0); };
@@ -138,6 +145,9 @@
       G.text(tl.s.name, tl.x + tl.w / 2, tl.y + tl.h + 4, { c: '#ffffff', o: '#000', al: 'c' });
       G.text('RIVAL: ' + G.ROB[tl.s.hero].name, tl.x + tl.w / 2, tl.y + tl.h + 13, { c: '#ffb020', o: '#000', al: 'c' });
     }
+    const db = difBtns();
+    G.text('ENEMIGO:', db[0].x - 6, db[0].y + 5, { c: '#ffffff', o: '#000', al: 'r' });
+    for (const b of db) G.button(b, (G.save.data.dif || 0) === b.i);
   };
 
   // ---------- VS ----------
@@ -164,6 +174,7 @@
     G.drawSprite(VS.v, 'idle0', 1, Math.round(-80 + k * (W * 0.24 + 80)), H + 60, 2);
     G.drawSprite(VS.h, 'idle0', -1, Math.round(W + 80 - k * (W * 0.24 + 80)), H + 60, 2);
     G.text('NIVEL ' + VS.level + ' · ' + G.STAGES[VS.stage].name, W / 2, 8 + G.safeT, { s: 2, c: '#ffffff', o: '#000', al: 'c' });
+    G.text('ENEMIGO: ' + DIFS[G.save.data.dif || 0], W / 2, 28 + G.safeT, { c: '#fff3a0', o: '#000', al: 'c' });
     G.text(vs.name, G.safeL + 10, 30, { s: 2, c: '#ffffff', o: '#000' });
     G.text('TÚ', G.safeL + 10, 48, { c: '#c99bff', o: '#000' });
     G.text(hs.name, W - G.safeR - 10, 30, { s: 2, c: '#ffffff', o: '#000', al: 'r' });
