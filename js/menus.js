@@ -49,9 +49,10 @@
 
   // ---------- elegir villano ----------
   const SEL = G.scenes.select = {};
-  SEL.enter = function () { SEL.sel = G.save.data.villain || 0; G.audio.play('select'); G.VILLAINS.forEach((v) => G.preload(v)); };
+  SEL.enter = function () { SEL.sel = G.save.data.villain || 0; G.audio.play('select'); G.VILLAINS.forEach((v, i) => G.preload(G.villainId(i))); };
+  function tallerBtn() { const b = goBtn(); return { x: b.x - 76, y: b.y, w: 68, h: 20, label: 'TALLER' }; }
   function cards() {
-    const W = G.W, H = G.H, n = 4, gap = 4, x0 = G.safeL + 6, x1 = W - G.safeR - 6;
+    const W = G.W, H = G.H, n = G.VILLAINS.length, gap = 4, x0 = G.safeL + 6, x1 = W - G.safeR - 6;
     const cw = Math.floor((x1 - x0 - gap * (n - 1)) / n), top = 30, ch = H - top - 34;
     return G.VILLAINS.map((v, i) => ({ x: x0 + i * (cw + gap), y: top, w: cw, h: ch, v, i }));
   }
@@ -59,12 +60,14 @@
   SEL.down = function (id, x, y) {
     if (G.inRect(x, y, backBtn(), 4)) { G.audio.sfx('back'); G.go('title'); return; }
     if (G.inRect(x, y, goBtn(), 3)) { pick(); return; }
+    if (G.inRect(x, y, tallerBtn(), 3)) { G.save.data.villain = SEL.sel; G.save.write(); G.audio.sfx('ok'); G.go('taller'); return; }
     for (const c of cards()) if (G.inRect(x, y, c)) { if (SEL.sel === c.i && SEL.t > 0.3) { pick(); return; } SEL.sel = c.i; SEL.selT = SEL.t; G.audio.sfx('sel'); }
   };
   function pick() { G.save.data.villain = SEL.sel; G.save.write(); G.audio.sfx('ok'); G.go('map'); }
   SEL.key = function (k) {
-    if (k === 'ArrowLeft' || k === 'KeyA') { SEL.sel = (SEL.sel + 3) % 4; G.audio.sfx('sel'); }
-    if (k === 'ArrowRight' || k === 'KeyD') { SEL.sel = (SEL.sel + 1) % 4; G.audio.sfx('sel'); }
+    const n = G.VILLAINS.length;
+    if (k === 'ArrowLeft' || k === 'KeyA') { SEL.sel = (SEL.sel + n - 1) % n; G.audio.sfx('sel'); }
+    if (k === 'ArrowRight' || k === 'KeyD') { SEL.sel = (SEL.sel + 1) % n; G.audio.sfx('sel'); }
     if (k === 'Enter' || k === 'Space') pick();
     if (k === 'Escape') G.go('title');
   };
@@ -81,8 +84,9 @@
       const cx = c.x + Math.round(c.w / 2) - 4, fy = c.y + Math.min(c.h - 52, 128);
       ell(cx + 4, fy, 24, 4, '#000', 0.35);
       const showVeh = on && Math.floor((t - (SEL.selT || 0)) / 1.4) % 2 === 1;
-      if (showVeh) G.drawSprite(c.v, 'veh' + (Math.floor(t * 8) % 2), 1, cx - 2, fy);
-      else G.drawSprite(c.v, on ? (Math.floor(t * 2) % 2 ? 'idle1' : 'idle0') : 'idle0', 1, cx, fy, 1, on ? null : null);
+      const vid = G.villainId(c.i);
+      if (showVeh) G.drawSprite(vid, 'veh' + (Math.floor(t * 8) % 2), 1, cx - 2, fy);
+      else G.drawSprite(vid, on ? (Math.floor(t * 2) % 2 ? 'idle1' : 'idle0') : 'idle0', 1, cx, fy);
       if (!on) A(c.x + 1, c.y + 1, c.w - 2, c.h - 2, '#140a24', 0.35);
       let y = fy + 4;
       G.text(sp.name, c.x + c.w / 2, y, { c: on ? '#ffe266' : '#ffffff', o: '#000', al: 'c' }); y += 9;
@@ -97,7 +101,9 @@
       }
     }
     const b = goBtn(); G.button(b, true);
+    G.button(tallerBtn(), false);
     G.text(G.ROB[G.VILLAINS[SEL.sel]].desc, W / 2, b.y - 9, { c: '#ffffff', o: '#000', al: 'c' });
+    G.text('PUNTOS ' + G.fmt(G.save.data.shop.wallet), W - G.safeR - 6, 11 + G.safeT, { c: '#ffe266', o: '#000', al: 'r' });
   };
 
   // ---------- elegir lugar ----------
@@ -154,7 +160,7 @@
   const VS = G.scenes.vs = {};
   VS.enter = function () {
     const r = G.run; VS.stage = r.order[r.idx]; VS.level = r.idx + 1;
-    VS.v = G.VILLAINS[r.villain]; VS.h = G.STAGES[VS.stage].hero;
+    VS.v = G.villainId(r.villain); VS.h = G.STAGES[VS.stage].hero;
     G.preload(VS.v); G.preload(VS.h);
     G.audio.play(G.STAGES[VS.stage].music); G.audio.sfx('fight');
   };
@@ -188,6 +194,8 @@
   RES.enter = function (p) {
     RES.p = p;
     const r = G.run;
+    p.earned = Math.max(0, Math.round(p.earned || 0));
+    G.save.data.shop.wallet += p.earned; G.save.write();
     if (p.win) {
       r.score = p.score;
       G.save.data.beaten[p.stage] = 1;
@@ -229,10 +237,12 @@
       line('TIEMPO RESTANTE', p.time + ' S');
       line('BONUS', '+' + p.bonus, '#ffe266');
       line('PUNTOS', G.pad(p.score, 7), '#ffe266');
+      line('PARA EL TALLER', '+' + G.fmt(p.earned), '#5effc0');
     } else {
       G.text(p.timeup ? 'SE ACABÓ EL TIEMPO' : G.ROB[p.hero].name + ' TE HA VENCIDO', x, 48, { c: '#ff9a8a', o: '#000', al: 'c' }); y = 64;
       line('CIUDAD DESTRUIDA', p.pct + '%', '#ff9a3a');
       line('PUNTOS', G.pad(p.base, 7), '#ffe266');
+      line('PARA EL TALLER', '+' + G.fmt(p.earned), '#5effc0');
       G.text('¡LOS VILLANOS NUNCA SE RINDEN!', x, y + 6, { c: '#ffffff', o: '#000', al: 'c' });
     }
     if (t > 0.6) for (const b of resBtns()) G.button(b, b.id !== 'menu');
@@ -244,7 +254,7 @@
   END.down = function () { if (END.t > 1.5) { G.audio.sfx('ok'); G.go('title'); } };
   END.key = END.down;
   END.draw = function () {
-    const W = G.W, H = G.H, t = END.t, v = G.VILLAINS[G.run ? G.run.villain : 0];
+    const W = G.W, H = G.H, t = END.t, v = G.villainId(G.run ? G.run.villain : 0);
     R(0, 0, W, H, '#1a0820');
     for (let i = 0; i < 40; i++) { const x = (i * 97 + t * 30 * (1 + i % 3)) % W, y = (i * 53) % H; A(x, y, 2, 2, '#ffe266', 0.6); }
     G.drawSprite(v, 'win', 1, Math.round(W / 2), H + 80, 2);

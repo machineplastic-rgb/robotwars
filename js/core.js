@@ -257,7 +257,7 @@ window.G = window.G || {};
   const KEY = 'robotwars.save.v1';
   G.save = {
     data: null,
-    defaults() { return { beaten: {}, best: 0, villain: 0, dif: 0, settings: { music: 1, sfx: 1, vib: 1 } }; },
+    defaults() { return { beaten: {}, best: 0, villain: 0, dif: 0, shop: { wallet: 0, colors: {}, weapons: ['rayo'], weapon: 'rayo', flyLv: 0 }, settings: { music: 1, sfx: 1, vib: 1 } }; },
     load() {
       let d = null;
       try { d = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { d = null; }
@@ -266,8 +266,14 @@ window.G = window.G || {};
       d.settings = Object.assign(def.settings, d.settings || {});
       d.beaten = d.beaten || {};
       d.best = d.best || 0;
-      d.villain = G.clamp(d.villain || 0, 0, 3);
+      d.villain = G.clamp(d.villain || 0, 0, 4);
       d.dif = G.clamp(d.dif || 0, 0, 2);
+      d.shop = Object.assign(def.shop, d.shop || {});
+      if (!Array.isArray(d.shop.weapons) || !d.shop.weapons.length) d.shop.weapons = ['rayo'];
+      if (d.shop.weapons.indexOf(d.shop.weapon) < 0) d.shop.weapon = 'rayo';
+      d.shop.flyLv = G.clamp(d.shop.flyLv || 0, 0, 3);
+      d.shop.wallet = Math.max(0, Math.floor(d.shop.wallet || 0));
+      d.shop.colors = d.shop.colors || {};
       this.data = d;
     },
     write() { try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch (e) { } },

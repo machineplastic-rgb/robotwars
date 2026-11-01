@@ -92,7 +92,8 @@
     return {
       id, sp, side, x, y, z: 0, vx: 0, vy: 0, vz: 0, face, hp: max, max, shadowHp: max, rep: 35,
       mode: 'robot', state: 'idle', st: 0, anim: 0, combo: 0, queued: false, hitDone: false, hitFlash: 0, invul: 0, lastHurt: 9,
-      fly: 5 + st.fly, flyMax: 5 + st.fly, flying: false, cool: 0, healT: 0,
+      fly: 5 + st.fly + (side === 'v' ? G.save.data.shop.flyLv * 3 : 0), flyMax: 5 + st.fly + (side === 'v' ? G.save.data.shop.flyLv * 3 : 0),
+      flyLv: side === 'v' ? G.save.data.shop.flyLv : 0, flying: false, cool: 0, healT: 0,
       ctrl: { mx: 0, my: 0, golpe: false, disparar: false, salto: false, volar: false, transf: false },
       ai: { t: 0.5, plan: 'approach', dur: 0, sdir: 1 },
     };
@@ -194,21 +195,34 @@
 
   // ---------- proyectiles ----------
   function shoot(owner, kind, x, y, z, face, extra) {
-    const spd = kind === 'shell' ? 300 : kind === 'missile' ? 250 : kind === 'bullet' ? 330 : kind === 'beam' ? 360 : 280;
+    const spd = kind === 'shell' ? 300 : kind === 'missile' ? 250 : kind === 'bullet' ? 330 : kind === 'beam' ? 360 : kind === 'plasma' ? 260 : kind === 'mega' ? 620 : 280;
     const dmg = kind === 'shell' ? 62 : kind === 'missile' ? 34 : kind === 'bullet' ? 9 : kind === 'beam' ? 32 : 26;
     const k = owner === 'p' ? 1 : 0.6; // los disparos enemigos van más lentos: se pueden esquivar
     S.proj.push(Object.assign({ owner, kind, x, y, z, vx: face * spd * k, vy: 0, vz: 0, face, dmg, t: 0, life: owner === 'p' ? 2.2 : 3.2 }, extra || {}));
   }
+  // armas de disparo del taller (el rival siempre usa el rayo)
+  function fireWeapon(r, o) {
+    const who = r === S.p ? 'p' : 'e';
+    const w = who === 'p' ? G.save.data.shop.weapon : 'rayo';
+    const x = r.x + r.face * 30, z = r.z + 66, col = r.sp.acc;
+    switch (w) {
+      case 'doble': for (const dy of [-7, 7]) shoot(who, 'beam', x, r.y + dy, z, r.face, { target: o, col, dmg: 26 }); G.audio.sfx('laser'); break;
+      case 'plasma': shoot(who, 'plasma', x, r.y, z, r.face, { target: o, col, dmg: 75 }); G.audio.sfx('missile'); break;
+      case 'misiles': for (const k of [0, 1, 2]) shoot(who, 'missile', x, r.y + (k - 1) * 6, z, r.face, { target: o, t: -k * 0.07, dmg: 30 }); G.audio.sfx('missile'); break;
+      case 'mega': shoot(who, 'mega', x, r.y, z, r.face, { target: o, col, dmg: 95, hits: [], hitsO: [] }); G.audio.sfx('laser'); G.audio.sfx('missile'); G.shake(3); break;
+      default: shoot(who, 'beam', x, r.y, z, r.face, { target: o, col }); G.audio.sfx('laser');
+    }
+  }
   function explode(p, x, y, z) {
-    boom(x, y, z, p.kind === 'bullet' ? 5 : p.kind === 'beam' ? 8 : p.kind === 'missile' ? 10 : 13);
+    boom(x, y, z, p.kind === 'bullet' ? 5 : p.kind === 'beam' ? 8 : p.kind === 'missile' ? 10 : p.kind === 'plasma' ? 18 : 13);
     G.audio.sfx(p.kind === 'bullet' ? 'crunch' : 'boom');
-    if (p.kind !== 'bullet') { areaObj(x, y, p.kind === 'shell' ? 22 : 16, p.kind === 'shell' ? 70 : 45, { explosive: true }); G.shake(4); }
+    if (p.kind !== 'bullet') { areaObj(x, y, p.kind === 'shell' ? 22 : p.kind === 'plasma' ? 32 : 16, p.kind === 'shell' ? 70 : p.kind === 'plasma' ? 100 : 45, { explosive: true }); G.shake(p.kind === 'plasma' ? 6 : 4); }
   }
   function updProj(dt) {
     for (const p of S.proj) {
       p.t += dt;
       if (p.kind === 'missile' && p.target) { p.vy = G.clamp((p.target.y - p.y) * 3, -60, 60); p.vz = G.clamp((p.target.z + 50 - p.z) * 2, -80, 80); if (p.t % 0.06 < dt) smoke(p.x - p.face * 6, p.y, p.z, 3, 0, 0.6); }
-      if (p.kind === 'beam' && p.owner === 'p' && p.target) { p.vy = G.clamp((p.target.y - p.y) * 5, -90, 90); p.vz = G.clamp((p.target.z + 60 - p.z) * 3, -140, 140); }
+      if ((p.kind === 'beam' || p.kind === 'plasma' || p.kind === 'mega') && p.owner === 'p' && p.target) { p.vy = G.clamp((p.target.y - p.y) * 5, -90, 90); p.vz = G.clamp((p.target.z + 60 - p.z) * 3, -140, 140); }
       if (p.kind === 'bomb') p.vz -= 400 * dt;
       p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
       if (p.t > p.life || p.x < -20 || p.x > AW + 20) { p.dead = true; continue; }
@@ -218,12 +232,21 @@
         if (Math.abs(t.x - p.x) < 18 && Math.abs(t.y - p.y) < 15 && p.z >= t.z - 4 && p.z <= t.z + (t.mode === 'veh' ? 34 : 100)) {
           if (t.state !== 'ko' && t.state !== 'down' && t.invul <= 0) {
             const att = p.owner === 'p' ? S.p : p.owner === 'e' ? S.e : null;
-            hurt(att, t, p.owner === 'army' ? p.dmg * (0.45 + S.level * 0.05) : p.dmg * (att ? strMul(att) : 1), p.kind === 'shell', p.x, p.z);
+            if (p.kind === 'mega') { if (p.hits.indexOf(t) < 0) { p.hits.push(t); hurt(att, t, p.dmg * strMul(att), true, p.x, p.z); boom(p.x, p.y, p.z, 12); } continue; }
+            hurt(att, t, p.owner === 'army' ? p.dmg * (0.45 + S.level * 0.05) : p.dmg * (att ? strMul(att) : 1), p.kind === 'shell' || p.kind === 'plasma', p.x, p.z);
             p.dead = true; explode(p, p.x, p.y, p.z); break;
           }
         }
       }
       if (p.dead) continue;
+      if (p.kind === 'mega') {
+        for (const o of S.objs) {
+          if (o.state === 2 || o.front || p.hitsO.indexOf(o) >= 0) continue;
+          if (p.x > o.x && p.x < o.x + o.w && p.y > o.y - o.d - 6 && p.y < o.y + 4) { p.hitsO.push(o); damageObj(o, 110, { explosive: true }); boom(p.x, p.y, Math.min(p.z, o.h), 8); }
+        }
+        for (const u of S.army) if (!u.dead && Math.abs(u.x - p.x) < 16 && Math.abs(u.y - p.y) < 16) killUnit(u);
+        continue;
+      }
       if (p.z < 60) for (const o of S.objs) {
         if (o.state === 2 || o.kind === 'prop' || o.front) continue;
         if (p.x > o.x && p.x < o.x + o.w && p.y > o.y - o.d - 4 && p.y < o.y + 2 && p.z < o.h + 4) { p.dead = true; explode(p, p.x, p.y, p.z); damageObj(o, 60, { explosive: true }); break; }
@@ -398,7 +421,7 @@
         if (c.golpe) {
           if (r.flying && r.z > 30) { startState(r, 'fdive'); r.flying = false; r.vz = -60; G.audio.sfx('whoosh'); }
           else { r.combo = 0; startState(r, 'atk'); }
-        } else if (c.disparar && r.cool <= 0) { startState(r, 'shoot'); r.cool = 0.5; }
+        } else if (c.disparar && r.cool <= 0) { startState(r, 'shoot'); r.cool = who === 'p' ? G.weapon(G.save.data.shop.weapon).cool : 0.5; }
       } else {
         const v = r.sp.veh;
         const missiles = () => { for (const k of [0, 1]) shoot(who, 'missile', r.x + r.face * 20, r.y + (k ? 4 : -4), r.z + 10, r.face, { target: o, t: -k * 0.08 }); r.cool = 0.9; G.audio.sfx('missile'); };
@@ -414,7 +437,7 @@
     switch (r.state) {
       case 'idle': case 'walk': {
         let mx = canAct ? c.mx : 0, my = canAct ? c.my : 0;
-        const spd = veh ? VEHSPD[r.sp.veh] : walkSpd(r) * (r.flying ? 1.25 : 1);
+        const spd = veh ? VEHSPD[r.sp.veh] : walkSpd(r) * (r.flying ? 1.25 + 0.12 * (r.flyLv || 0) : 1);
         r.vx = mx * spd; r.vy = my * spd * 0.75;
         r.state = (mx || my) ? 'walk' : 'idle';
         if (veh) { if (mx) r.face = G.sign(mx); }
@@ -452,7 +475,7 @@
         break;
       case 'shoot':
         r.vx *= 0.7; r.vy *= 0.7;
-        if (!r.hitDone && r.st > 0.06) { r.hitDone = true; shoot(r === S.p ? 'p' : 'e', 'beam', r.x + r.face * 30, r.y, r.z + 66, r.face, { target: o, col: r.sp.acc }); G.audio.sfx('laser'); }
+        if (!r.hitDone && r.st > 0.06) { r.hitDone = true; fireWeapon(r, o); }
         if (r.st > 0.22) startState(r, 'idle');
         break;
       case 'fdive':
@@ -538,18 +561,18 @@
     const pct = Math.round(Math.min(100, (S.destroyed / S.goalWt) * 100));
     let bonus = 0;
     if (win) bonus = 5000 + Math.ceil(S.time) * 50 + pct * 40;
-    G.go('result', { win, score: S.score + bonus, base: S.score, bonus, pct, time: Math.ceil(S.time), stage: S.stageIdx, level: S.level, villain: S.vid, hero: S.hid, timeup: S.timeup });
+    G.go('result', { win, score: S.score + bonus, base: S.score, bonus, pct, earned: S.score + bonus - S.startScore, time: Math.ceil(S.time), stage: S.stageIdx, level: S.level, villain: S.vid, hero: S.hid, timeup: S.timeup });
   }
 
   // ---------- escena ----------
   const F = G.scenes.fight = {};
   F.enter = function (p) {
     const B = G.buildStage(p.stage);
-    const v = G.VILLAINS[p.villain], h = G.STAGES[p.stage].hero;
+    const v = G.villainId(p.villain), h = G.STAGES[p.stage].hero;
     G.preload(v); G.preload(h);
     S = {
       stageIdx: p.stage, st: B.st, bg: B.bg, objs: B.objs, level: p.level || 1, vid: v, hid: h,
-      army: [], proj: [], parts: [], time: 99, phase: 'intro', phaseT: 0, score: p.score || 0, destroyed: 0,
+      army: [], proj: [], parts: [], time: 99, phase: 'intro', phaseT: 0, score: p.score || 0, startScore: p.score || 0, destroyed: 0,
       totalWt: B.objs.filter((o) => !o.front && !o.nohit).reduce((a, o) => a + o.wt, 0), hitstop: 0, slow: 1, armyT: 10, paused: false, dif: G.clamp(G.save.data.dif || 0, 0, 2), auto: G.params.get('auto') === '1',
       cam: { x: AW / 2 - G.W / 2, y: 0 }, ctl: { joy: null, jr: 26, btn: {} }, t: 0,
     };
@@ -730,6 +753,20 @@
     const sx = Math.round(p.x - cx), sy = Math.round(p.y - cy - p.z), gy = Math.round(p.y - cy);
     if (p.t < 0) return;
     if (p.kind === 'bullet') { R(sx - 2, sy - 1, 5, 3, OUT); R(sx - 1, sy, 3, 1, '#fff3a0'); return; }
+    if (p.kind === 'plasma') {
+      const c = p.col || { d: '#3fae12', b: '#8cff3c', l: '#d2ffa8' };
+      ell(sx, gy, 6, 2, '#000', 0.25);
+      for (let i = 1; i <= 3; i++) ell(sx - p.face * i * 6, sy, 5 - i, 5 - i, c.b, 0.35);
+      ell(sx, sy, 8, 8, c.d, 0.55); ell(sx, sy, 6, 6, c.b); ell(sx - 1, sy - 1, 3, 3, c.l); ell(sx - 2, sy - 2, 1, 1, '#ffffff');
+      return;
+    }
+    if (p.kind === 'mega') {
+      const c = p.col || { d: '#3fae12', b: '#8cff3c', l: '#d2ffa8' };
+      const len = Math.min(70, 20 + p.t * 300), x0 = p.face > 0 ? sx - len : sx;
+      R(x0, sy - 5, len, 11, c.d); R(x0, sy - 4, len, 9, c.b); R(x0, sy - 2, len, 5, c.l); R(x0, sy - 1, len, 3, '#ffffff');
+      ell(sx, sy, 7, 7, '#ffffff', 0.8);
+      return;
+    }
     if (p.kind === 'beam') {
       const c = p.col || { d: '#3fae12', b: '#8cff3c', l: '#d2ffa8' };
       ell(sx, gy, 4, 1, '#000', 0.25);

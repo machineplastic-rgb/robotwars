@@ -42,6 +42,7 @@
     tornado: { name: 'TORNADO', side: 'v', veh: 'avion', main: PAL.black, sec: PAL.red, acc: PAL.yellowg, thigh: 'sec', head: 'pointy', sh: 'wings', chest: 'intakes', legs: 'thrusters', stats: { str: 3, spd: 5, def: 2, fly: 5 }, desc: 'RÁPIDO Y VUELA MÁS' },
     triturador: { name: 'TRITURADOR', side: 'v', veh: 'camion', main: PAL.steel, sec: PAL.orange, acc: PAL.orange, thigh: 'main', head: 'helmet', sh: 'stacks', chest: 'grill', legs: 'wheels', stats: { str: 5, spd: 3, def: 4, fly: 2 }, desc: 'EMBISTE CON TODO' },
     veneno: { name: 'VENENO', side: 'v', veh: 'coche', main: PAL.toxic, sec: PAL.black, acc: PAL.magenta, thigh: 'sec', head: 'horns', sh: 'wheelsh', chest: 'lights', legs: 'stripes', stats: { str: 3, spd: 5, def: 3, fly: 3 }, desc: 'EL MÁS VELOZ' },
+    furia: { name: 'FURIA', side: 'v', veh: 'coche', main: PAL.orange, sec: PAL.gunm, acc: P('#140a1e', '#5d309a', '#8a52d8', '#b48aff', '#e0ccff'), thigh: 'main', head: 'hair', sh: 'antpads', chest: 'windows', legs: 'rollers', arms: 'ribs', stats: { str: 4, spd: 4, def: 3, fly: 3 }, desc: 'FURIOSO Y CON RUEDAS' },
     voltar: { name: 'VOLTAR', side: 'h', veh: 'coche', main: PAL.yellow, sec: PAL.grey, acc: PAL.cyan, thigh: 'sec', head: 'ridge', sh: 'lights', chest: 'diamond', legs: 'wheels', stats: { str: 3, spd: 4, def: 3, fly: 3 } },
     blazer: { name: 'BLAZER', side: 'h', veh: 'avion', main: PAL.red, sec: PAL.white, acc: PAL.amber, visor: PAL.cyan, thigh: 'sec', head: 'fin', sh: 'wings', chest: 'flame', legs: 'thrusters', stats: { str: 4, spd: 4, def: 3, fly: 5 } },
     sahara: { name: 'SAHARA', side: 'h', veh: 'camion', main: PAL.sand, sec: PAL.white, acc: PAL.lime, thigh: 'sec', head: 'visor', sh: 'round', chest: 'plates', legs: 'wheels', stats: { str: 4, spd: 3, def: 4, fly: 2 } },
@@ -50,7 +51,30 @@
     astron: { name: 'ASTRÓN', side: 'h', veh: 'avion', main: PAL.chrome, sec: PAL.indigo, acc: PAL.aqua, thigh: 'sec', head: 'crown', sh: 'bigwings', chest: 'bigcore', legs: 'thrusters', stats: { str: 5, spd: 4, def: 5, fly: 5 }, boss: true },
   };
   for (const id in G.ROB) G.ROB[id].id = id;
-  G.VILLAINS = ['demoledor', 'tornado', 'triturador', 'veneno'];
+
+  // ---------- personalización de colores (taller) ----------
+  G.MAINPALS = [null, PAL.red, P('#05081e', '#1a2e8c', '#2e52d2', '#5a84f4', '#a8c4ff'), PAL.toxic, PAL.orange, PAL.black, PAL.white, PAL.gold,
+    P('#1e0614', '#a01a6a', '#e83a9a', '#ff7ac4', '#ffc8e8'), PAL.purple, PAL.aqua];
+  G.MAINNAMES = ['ORIGINAL', 'ROJO', 'AZUL', 'VERDE', 'NARANJA', 'NEGRO', 'BLANCO', 'DORADO', 'ROSA', 'MORADO', 'CIAN'];
+  G.ACCPALS = [null, PAL.green, PAL.cyan, PAL.magenta, PAL.yellowg, P('#2a0404', '#b01a1a', '#ff3a3a', '#ff9a9a', '#ffffff'), PAL.orange, P('#1a1a22', '#b8bcc8', '#f4f6fa', '#ffffff', '#ffffff')];
+  G.ACCNAMES = ['ORIGINAL', 'VERDE', 'CIAN', 'ROSA', 'AMARILLO', 'ROJO', 'NARANJA', 'BLANCO'];
+  G.customId = function (id, m, a) {
+    m = m || 0; a = a || 0;
+    if (!m && !a) return id;
+    const cid = id + '~' + m + '~' + a;
+    if (!G.ROB[cid]) {
+      const base = G.ROB[id];
+      G.ROB[cid] = Object.assign({}, base, { id: cid, main: m ? G.MAINPALS[m] : base.main, acc: a ? G.ACCPALS[a] : base.acc });
+    }
+    return cid;
+  };
+  // id del villano con los colores que tenga guardados
+  G.villainId = function (idx) {
+    const id = G.VILLAINS[idx || 0];
+    const c = (G.save.data.shop.colors || {})[id] || [0, 0];
+    return G.customId(id, c[0], c[1]);
+  };
+  G.VILLAINS = ['demoledor', 'tornado', 'triturador', 'veneno', 'furia'];
   G.HEROES = ['voltar', 'blazer', 'sahara', 'acero', 'kodiak', 'astron'];
   G.VEHNAME = { tanque: 'TANQUE', avion: 'AVIÓN', camion: 'CAMIÓN', coche: 'COCHE' };
 
@@ -100,21 +124,34 @@
     }
   }
 
+  // brazo con rayas (estilo 'ribs'): rayas horizontales en toda la pieza
+  function ribs(s, x, y, w, h, horiz) {
+    if (s.arms !== 'ribs') return;
+    if (horiz) for (let i = x + 3; i < x + w - 2; i += 3) R(i, y + 2, 1, h - 4, s.main.o);
+    else for (let i = y + 3; i < y + h - 2; i += 3) R(x + 2, i, w - 4, 1, s.main.o);
+  }
   function rearArm(s, mode, ox, oy) {
     const m = s.main, k = s.sec;
-    if (mode === 'up') { part(ox - 36, oy - 92, 13, 14, m); part(ox - 38, oy - 108, 14, 17, m, 2); R(ox - 35, oy - 102, 8, 1, m.d); fist(ox - 38, oy - 121, 15, 13, k); }
-    else if (mode === 'back') { part(ox - 34, oy - 66, 13, 13, m); part(ox - 39, oy - 55, 15, 16, m, 2); R(ox - 36, oy - 49, 9, 1, m.d); fist(ox - 41, oy - 41, 14, 11, k); }
-    else { part(ox - 34, oy - 66, 13, 13, m); part(ox - 37, oy - 54, 16, 17, m, 2); R(ox - 34, oy - 48, 10, 1, m.d); R(ox - 34, oy - 44, 10, 1, m.d); fist(ox - 36, oy - 38, 14, 11, k); }
+    if (mode === 'up') { part(ox - 36, oy - 92, 13, 14, m); ribs(s, ox - 36, oy - 92, 13, 14); part(ox - 38, oy - 108, 14, 17, m, 2); ribs(s, ox - 38, oy - 108, 14, 17); R(ox - 35, oy - 102, 8, 1, m.d); fist(ox - 38, oy - 121, 15, 13, k); }
+    else if (mode === 'back') { part(ox - 34, oy - 66, 13, 13, m); ribs(s, ox - 34, oy - 66, 13, 13); part(ox - 39, oy - 55, 15, 16, m, 2); ribs(s, ox - 39, oy - 55, 15, 16); R(ox - 36, oy - 49, 9, 1, m.d); fist(ox - 41, oy - 41, 14, 11, k); }
+    else { part(ox - 34, oy - 66, 13, 13, m); ribs(s, ox - 34, oy - 66, 13, 13); part(ox - 37, oy - 54, 16, 17, m, 2); ribs(s, ox - 37, oy - 54, 16, 17); R(ox - 34, oy - 48, 10, 1, m.d); R(ox - 34, oy - 44, 10, 1, m.d); fist(ox - 36, oy - 38, 14, 11, k); }
   }
   function frontArm(s, mode, ox, oy) {
     const m = s.main, k = s.sec;
     switch (mode) {
-      case 'punch': part(ox + 22, oy - 73, 15, 12, m); part(ox + 35, oy - 75, 21, 15, m, 3); R(ox + 40, oy - 70, 12, 1, m.d); R(ox + 40, oy - 66, 12, 1, m.d); fist(ox + 55, oy - 77, 15, 18, k, true); break;
-      case 'wind': part(ox + 20, oy - 70, 13, 12, m); part(ox + 6, oy - 74, 17, 13, m, 2); fist(ox - 3, oy - 76, 13, 14, k, true); break;
-      case 'up': part(ox + 23, oy - 92, 13, 14, m); part(ox + 24, oy - 108, 14, 17, m, 2); R(ox + 27, oy - 102, 8, 1, m.d); fist(ox + 23, oy - 121, 15, 13, k); break;
-      case 'back': part(ox + 21, oy - 66, 13, 12, m); part(ox + 25, oy - 56, 15, 15, m, 2); fist(ox + 28, oy - 43, 13, 10, k); break;
-      default: part(ox + 22, oy - 66, 13, 13, m); part(ox + 23, oy - 54, 16, 17, m, 2); R(ox + 26, oy - 48, 10, 1, m.d); R(ox + 26, oy - 44, 10, 1, m.d); fist(ox + 24, oy - 38, 14, 11, k);
+      case 'punch': part(ox + 22, oy - 73, 15, 12, m); ribs(s, ox + 22, oy - 73, 15, 12, true); part(ox + 35, oy - 75, 21, 15, m, 3); ribs(s, ox + 35, oy - 75, 21, 15, true); R(ox + 40, oy - 70, 12, 1, m.d); R(ox + 40, oy - 66, 12, 1, m.d); fist(ox + 55, oy - 77, 15, 18, k, true); break;
+      case 'wind': part(ox + 20, oy - 70, 13, 12, m); part(ox + 6, oy - 74, 17, 13, m, 2); ribs(s, ox + 6, oy - 74, 17, 13, true); fist(ox - 3, oy - 76, 13, 14, k, true); break;
+      case 'up': part(ox + 23, oy - 92, 13, 14, m); ribs(s, ox + 23, oy - 92, 13, 14); part(ox + 24, oy - 108, 14, 17, m, 2); ribs(s, ox + 24, oy - 108, 14, 17); R(ox + 27, oy - 102, 8, 1, m.d); fist(ox + 23, oy - 121, 15, 13, k); break;
+      case 'back': part(ox + 21, oy - 66, 13, 12, m); ribs(s, ox + 21, oy - 66, 13, 12); part(ox + 25, oy - 56, 15, 15, m, 2); ribs(s, ox + 25, oy - 56, 15, 15); fist(ox + 28, oy - 43, 13, 10, k); break;
+      default: part(ox + 22, oy - 66, 13, 13, m); ribs(s, ox + 22, oy - 66, 13, 13); part(ox + 23, oy - 54, 16, 17, m, 2); ribs(s, ox + 23, oy - 54, 16, 17); R(ox + 26, oy - 48, 10, 1, m.d); R(ox + 26, oy - 44, 10, 1, m.d); fist(ox + 24, oy - 38, 14, 11, k);
     }
+  }
+  // pies con ruedas y puntera (estilo 'rollers')
+  function feetX(s, x, y, w, h, left) {
+    if (s.legs !== 'rollers') return;
+    const tx = left ? x - 4 : x + w + 3;
+    G.polyO([[left ? x + 1 : x + w - 1, y + 1], [tx, y + h], [left ? x + 1 : x + w - 1, y + h]], s.main.b, OUT);
+    for (const wx of [x + 5, x + w - 6]) { ell(wx, y + h + 1, 3, 2.5, OUT); ell(wx, y + h + 1, 2, 1.5, '#5a5a66'); Px(wx, y + h + 1, '#c8c8d2'); }
   }
   function legDetail(s, x, y, w, h, left) {
     const a = s.acc, m = s.main;
@@ -125,12 +162,13 @@
       case 'treads': R(x + 2, y + 3, w - 4, h - 6, OUT); R(x + 3, y + 4, w - 6, h - 8, '#2a2a30'); for (let i = y + 5; i < y + h - 4; i += 3) R(x + 3, i, w - 6, 1, '#4c4c56'); break;
       case 'pistons': R(x + 5, y + 3, 5, h - 8, OUT); R(x + 6, y + 4, 3, h - 10, '#c8ccd4'); R(x + 6, y + 4, 1, h - 10, '#ffffff'); R(x + 5, y + 3, 5, 3, m.d); break;
       case 'stripes': for (let i = 0; i < 3 && 5 + i * 6 < h - 3; i++) R(x + 3, y + 5 + i * 6, w - 6, 2, a.b); break;
+      case 'rollers': R(x + 3, y + 4, w - 6, 2, a.b); R(x + 3, y + 4, w - 6, 1, a.l); R(x + 5, y + 10, 2, Math.max(2, h - 15), m.d); break;
     }
   }
   function legs(s, L, cx, fy) {
     const m = s.main, k = s.sec, th = s.thigh === 'sec' ? k : m;
     if (L.legs === 'tuck') {
-      for (const sx of [-17, 4]) { part(cx + sx, fy - 47, 13, 12, th); part(cx + sx - 2, fy - 38, 15, 18, m, 2); legDetail(s, cx + sx - 2, fy - 38, 15, 18, sx < 0); part(cx + sx - 5, fy - 22, 19, 8, k, 2); }
+      for (const sx of [-17, 4]) { part(cx + sx, fy - 47, 13, 12, th); part(cx + sx - 2, fy - 38, 15, 18, m, 2); legDetail(s, cx + sx - 2, fy - 38, 15, 18, sx < 0); part(cx + sx - 5, fy - 22, 19, 8, k, 2); feetX(s, cx + sx - 5, fy - 22, 19, 8, sx < 0); }
       return;
     }
     if (L.legs === 'straight') {
@@ -138,14 +176,14 @@
       return;
     }
     if (L.legs === 'crouch') {
-      for (const [sx, d] of [[-18, -1], [5, 1]]) { part(cx + sx, fy - 38, 13, 10, th); part(cx + sx - 2 + d * 2, fy - 30, 15, 22, m, 2); legDetail(s, cx + sx - 2 + d * 2, fy - 30, 15, 22, d < 0); part(cx + sx - 5 + d * 2, fy - 8, 19, 8, k, 2); }
+      for (const [sx, d] of [[-18, -1], [5, 1]]) { part(cx + sx, fy - 38, 13, 10, th); part(cx + sx - 2 + d * 2, fy - 30, 15, 22, m, 2); legDetail(s, cx + sx - 2 + d * 2, fy - 30, 15, 22, d < 0); part(cx + sx - 5 + d * 2, fy - 8, 19, 8, k, 2); feetX(s, cx + sx - 5 + d * 2, fy - 8, 19, 8, d < 0); }
       return;
     }
     for (const [sx, lg] of [[-16, L.lL], [4, L.lR]]) {
       const dx = lg.dx, lf = lg.lift;
       part(cx + sx + dx, fy - 45, 12, 15, th);
       part(cx + sx - 3 + dx, fy - 32 - lf, 15, 26, m, 2); legDetail(s, cx + sx - 3 + dx, fy - 32 - lf, 15, 26, sx < 0);
-      part(cx + sx - 6 + dx, fy - 8 - lf, 19, 8, k, 2);
+      part(cx + sx - 6 + dx, fy - 8 - lf, 19, 8, k, 2); feetX(s, cx + sx - 6 + dx, fy - 8 - lf, 19, 8, sx < 0);
     }
   }
   function waist(s, x, y) {
@@ -202,6 +240,15 @@
         part(ox - 17, oy - 77, 16, 13, pl, 2); part(ox + 1, oy - 77, 16, 13, pl, 2);
         R(ox - 3, oy - 61, 6, 3, a.o); R(ox - 2, oy - 60, 4, 1, a.b); break;
       }
+      case 'windows':
+        R(ox - 20, oy - 78, 40, 17, a.d);
+        for (const wx of [ox - 19, ox + 1]) {
+          R(wx, oy - 77, 18, 15, OUT); R(wx + 1, oy - 76, 16, 13, '#2b3a4c'); R(wx + 1, oy - 76, 16, 2, '#3e5470');
+          for (const k of [0, 6]) G.line(wx + 3 + k, oy - 65, wx + 9 + k, oy - 75, '#8fb4dc');
+        }
+        R(ox - 1, oy - 77, 2, 15, a.b);
+        for (let i = 0; i < 3; i++) { R(ox - 8, oy - 59 + i * 3, 16, 2, m.d); R(ox - 8, oy - 59 + i * 3, 16, 1, m.l); }
+        break;
       case 'vents':
         for (let i = 0; i < 4; i++) R(ox - 14, oy - 75 + i * 4, 28, 2, m.o);
         R(ox - 4, oy - 60, 8, 3, a.o); R(ox - 3, oy - 59, 6, 1, a.b); break;
@@ -222,6 +269,17 @@
         break;
       case 'stacks': for (const sx of [ox - 38, ox + 16]) { part(sx, oy - 84, 22, 17, m, 5); R(sx + 3, oy - 73, 16, 3, k.b); R(sx + 3, oy - 73, 16, 1, k.l); } break;
       case 'wheelsh': for (const [sx, wx] of [[ox - 36, ox - 43], [ox + 16, ox + 34]]) { wheelV(wx, oy - 86); part(sx, oy - 84, 20, 15, m, 4); R(sx + 3, oy - 74, 14, 2, a.b); } break;
+      case 'antpads':
+        for (const sx of [ox - 40, ox + 17]) {
+          const ax = sx + 11;
+          G.line(ax - 4, oy - 85, ax, oy - 97, OUT); G.line(ax + 4, oy - 85, ax, oy - 97, OUT);
+          G.line(ax - 3, oy - 85, ax, oy - 95, k.l); G.line(ax + 3, oy - 85, ax, oy - 95, k.l);
+          R(ax - 2, oy - 90, 5, 1, OUT); R(ax - 1, oy - 99, 3, 3, a.b);
+          part(sx, oy - 85, 23, 19, m, 5);
+          ell(sx + 11, oy - 75, 5, 5, OUT); ell(sx + 11, oy - 75, 4, 4, a.b); ell(sx + 10, oy - 76, 2, 2, a.l);
+          G.line(sx + 9, oy - 77, sx + 13, oy - 73, OUT); G.line(sx + 13, oy - 77, sx + 9, oy - 73, OUT);
+        }
+        break;
       case 'round': for (const c of [ox - 29, ox + 28]) { ell(c, oy - 76, 12, 10, m.o); ell(c, oy - 76, 11, 9, m.b); ell(c - 2, oy - 79, 8, 5, m.l); ell(c - 3, oy - 81, 4, 2, m.h); R(c - 9, oy - 71, 18, 2, k.b); } break;
     }
   }
@@ -284,6 +342,20 @@
         part(hx - 11, hy - 85, 22, 7, k, 2);
         for (let i = 0; i < 5; i++) R(hx - 8 + i * 4, hy - 84, 2, 3, '#e8e8e8');
         break;
+      case 'hair': {
+        const hc = '#2a2230', hl = '#4e4258';
+        polyO([[hx - 13, hy - 90], [hx - 16, hy - 103], [hx - 10, hy - 100], [hx - 8, hy - 111], [hx - 3, hy - 103], [hx + 1, hy - 112], [hx + 5, hy - 103], [hx + 10, hy - 110], [hx + 11, hy - 100], [hx + 17, hy - 104], [hx + 14, hy - 90]], hc, OUT);
+        G.line(hx - 7, hy - 103, hx - 8, hy - 108, hl); G.line(hx + 2, hy - 104, hx + 1, hy - 109, hl); G.line(hx + 9, hy - 102, hx + 10, hy - 107, hl);
+        part(hx - 10, hy - 98, 20, 17, { o: OUT, d: '#b8a8b0', b: '#e0d4d8', l: '#f4ecee', h: '#ffffff' }, 2);
+        poly([[hx - 11, hy - 99], [hx + 11, hy - 99], [hx + 11, hy - 95], [hx + 7, hy - 97], [hx + 3, hy - 94], [hx - 2, hy - 97], [hx - 6, hy - 94], [hx - 11, hy - 97]], hc);
+        G.line(hx - 2, hy - 91, hx, hy - 96, a.d); G.line(hx, hy - 96, hx + 2, hy - 91, a.d); Px(hx - 1, hy - 93, a.d); Px(hx + 1, hy - 93, a.d);
+        R(hx - 8, hy - 89, 6, 3, OUT); R(hx - 7, hy - 89, 4, 2, '#ffffff'); Px(hx - 5, hy - 88, OUT);
+        R(hx + 2, hy - 89, 6, 3, OUT); R(hx + 3, hy - 89, 4, 2, '#ffffff'); Px(hx + 4, hy - 88, OUT);
+        G.line(hx - 9, hy - 92, hx - 3, hy - 89, OUT); G.line(hx + 8, hy - 92, hx + 2, hy - 89, OUT);
+        R(hx - 3, hy - 84, 6, 1, OUT); Px(hx - 4, hy - 83, OUT); Px(hx + 3, hy - 83, OUT);
+        poly([[hx - 5, hy - 82], [hx + 5, hy - 82], [hx, hy - 78]], '#d8ccd0');
+        break;
+      }
       case 'crown': {
         const gd = PAL.gold;
         polyO([[hx - 10, hy - 97], [hx - 9, hy - 107], [hx - 5, hy - 97]], gd.b, OUT);
