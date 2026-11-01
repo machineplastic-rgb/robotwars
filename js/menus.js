@@ -44,7 +44,7 @@
     G.text('ROBOTWARS', W / 2, 26, { s, c: FIRE, o: '#000', al: 'c' });
     G.text('¡ERES EL VILLANO! DESTRUYE LA CIUDAD', W / 2, 26 + 7 * s + 10, { c: '#c99bff', o: '#000', al: 'c' });
     if (Math.floor(t * 2) % 2 === 0) G.text('TOCA PARA EMPEZAR', W / 2, H - 34, { s: 2, c: '#ffffff', o: '#000', al: 'c' });
-    G.text('V1', W - G.safeR - 6, H - 12, { c: '#8a7aa8', al: 'r' });
+    G.text('V' + G.VERSION, W - G.safeR - 8, 8 + G.safeT, { s: 2, c: '#ffffff', o: '#000', al: 'r' });
   };
 
   // ---------- elegir villano ----------
