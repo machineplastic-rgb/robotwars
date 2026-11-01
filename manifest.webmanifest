@@ -1,0 +1,16 @@
+{
+  "name": "ROBOTWARS",
+  "short_name": "ROBOTWARS",
+  "description": "Eres el villano: destruye la ciudad y derrota a los 6 robots rivales.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#140a24",
+  "theme_color": "#140a24",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
