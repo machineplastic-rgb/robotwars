@@ -11,7 +11,7 @@ window.G = window.G || {};
   G.W = 480; G.H = 270; G.P = 1; G.dpr = 1; G.portrait = false;
   G.safeL = 0; G.safeR = 0; G.safeT = 0; G.safeB = 0;
   G.time = 0; G.frame = 0;
-  G.VERSION = 6; // súbelo en cada entrega (igual que el ZIP y el CACHE_NAME de sw.js)
+  G.VERSION = 7; // súbelo en cada entrega (igual que el ZIP y el CACHE_NAME de sw.js)
   G.params = new URLSearchParams(location.search);
 
   // ---------- utilidades ----------
@@ -267,7 +267,7 @@ window.G = window.G || {};
       d.settings = Object.assign(def.settings, d.settings || {});
       d.beaten = d.beaten || {};
       d.best = d.best || 0;
-      d.villain = G.clamp(d.villain || 0, 0, 4);
+      d.villain = G.clamp(d.villain || 0, 0, 10);
       d.dif = G.clamp(d.dif || 0, 0, 2);
       d.shop = Object.assign(def.shop, d.shop || {});
       if (!Array.isArray(d.shop.weapons) || !d.shop.weapons.length) d.shop.weapons = ['rayo'];

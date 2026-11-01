@@ -8,6 +8,11 @@
   const YMIN = 116, YMAX = AH - 16;
   let S = null;
   G.fightState = () => S;
+  // rival de cada lugar; si juegas con ese mismo robot, sale el siguiente rival
+  G.rivalFor = function (stage, vidx) {
+    const h = G.STAGES[stage].hero, mine = G.PLAYABLE[vidx || 0];
+    return mine === h ? G.HEROES[(G.HEROES.indexOf(h) + 1) % G.HEROES.length] : h;
+  };
 
   // ---------- cachés de efectos ----------
   const cache = new Map();
@@ -41,16 +46,18 @@
       }
     });
   }
-  function flameImg(s, f) {
-    return cached('f' + s + '|' + f, s * 2 + 3, s * 3 + 2, () => {
+  function flameImg(s, f, pi) {
+    pi = pi || 0;
+    return cached('f' + s + '|' + f + '|' + pi, s * 2 + 3, s * 3 + 2, () => {
+      const tc = G.TRAILS[pi].c;
       const rr = G.rng(s * 31 + f * 7), cx = s + 1, by = s * 3 + 1;
       for (let i = -s; i <= s; i++) {
         const hh = Math.round(s * 2.5 * (1 - Math.abs(i) / (s + 1)) * (0.6 + rr() * 0.7));
-        for (let j = 0; j < hh; j++) { const k = j / hh + Math.abs(i) / (s * 2.5); Px(cx + i, by - j, k < 0.3 ? '#fff4b0' : k < 0.55 ? '#ffc23a' : k < 0.85 ? '#ff7a1a' : '#d8341a'); }
+        for (let j = 0; j < hh; j++) { const k = j / hh + Math.abs(i) / (s * 2.5); Px(cx + i, by - j, k < 0.3 ? tc[0] : k < 0.55 ? tc[1] : k < 0.85 ? tc[2] : tc[3]); }
       }
     });
   }
-  function drawFlame(sx, sy, s, f) { const im = flameImg(s, f % 3); G.ctx().drawImage(im, Math.round(sx - s - 1), Math.round(sy - s * 3 - 1)); }
+  function drawFlame(sx, sy, s, f, pi) { const im = flameImg(s, f % 3, pi); G.ctx().drawImage(im, Math.round(sx - s - 1), Math.round(sy - s * 3 - 1)); }
   function armyTankImg(pal, face) {
     return cached('t' + pal.body + face, 40, 26, () => {
       const X = G.ctx();
@@ -568,7 +575,7 @@
   const F = G.scenes.fight = {};
   F.enter = function (p) {
     const B = G.buildStage(p.stage);
-    const v = G.villainId(p.villain), h = G.STAGES[p.stage].hero;
+    const v = G.villainId(p.villain), h = G.rivalFor(p.stage, p.villain);
     G.preload(v); G.preload(h);
     S = {
       stageIdx: p.stage, st: B.st, bg: B.bg, objs: B.objs, level: p.level || 1, vid: v, hid: h,
@@ -578,6 +585,7 @@
     };
     S.goalWt = S.totalWt * 0.6;
     S.p = mkRobot(v, 'v', G.SPAWN.v.x, G.SPAWN.v.y, 1, S.level, S.dif);
+    S.p.trail = G.trailOf(p.villain);
     S.e = mkRobot(h, 'h', G.SPAWN.h.x, G.SPAWN.h.y, -1, S.level, S.dif);
     layoutControls();
     snapCam();
@@ -738,7 +746,7 @@
     // propulsores
     if (!veh && (r.flying || r.state === 'flyatk') && r.z > 4) {
       const f = Math.floor(r.anim * 14) % 3;
-      for (const dx of [-7, 8]) drawFlame(sx + dx * r.face, sy + 7 + f, 3, f);
+      for (const dx of [-7, 8]) drawFlame(sx + dx * r.face, sy + 7 + f, 3, f, r.trail || 0);
     }
     if (r.state === 'ram') for (let i = 0; i < 4; i++) A(sx - r.face * (40 + i * 7), sy - 8 - i * 6, 14, 1, '#ffffff', 0.6);
     if (r.state === 'atk' && r.st > 0.08 && r.st < 0.2) for (const yy of [-80, -60, -66]) A(sx + r.face * 18 - (r.face < 0 ? 26 : 0), sy + yy, 26, 1, '#ffffff', 0.5);

@@ -1,5 +1,5 @@
 // Service worker: siempre carga primero lo último de internet; la copia guardada solo se usa sin conexión.
-const CACHE_NAME = 'robotwars-v6';
+const CACHE_NAME = 'robotwars-v7';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest',
   'js/core.js', 'js/font.js', 'js/audio.js', 'js/robots.js', 'js/stages.js', 'js/fight.js', 'js/shop.js', 'js/menus.js', 'js/main.js',

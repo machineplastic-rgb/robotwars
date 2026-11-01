@@ -1,5 +1,5 @@
 'use strict';
-// TALLER: cambiar colores del villano y gastar puntos en armas de disparo y poder de vuelo.
+// TALLER: personalizar el robot (colores, accesorio, emblema, dibujo, estela) y gastar puntos en armas y vuelo.
 (function (G) {
   const R = G.R, A = G.A;
   const ell = (...a) => G.ell(...a);
@@ -17,8 +17,15 @@
   G.fmt = (n) => String(Math.floor(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 
   const T = G.scenes.taller = {};
-  T.enter = function (p) { T.tab = (p && p.tab) || 'color'; T.v = G.save.data.villain || 0; T.msg = ''; T.msgT = 0; T.anim = 0; G.audio.play('select'); };
+  T.enter = function (p) {
+    T.tab = (p && p.tab) || 'color'; T.msg = ''; T.msgT = 0; T.anim = 0;
+    T.v = G.save.data.villain || 0; if (!G.isUnlocked(T.v)) T.v = 0;
+    G.audio.play('select');
+  };
   const shop = () => G.save.data.shop;
+  const baseId = () => G.PLAYABLE[T.v];
+  const custom = () => { const c = (shop().colors[baseId()] || []).slice(); while (c.length < 7) c.push(0); return c; };
+  function setCustom(i, v) { const c = custom(); c[i] = v; shop().colors[baseId()] = c; G.save.write(); G.preload(G.villainId(T.v)); }
   function say(m, good) { T.msg = m; T.msgGood = good; T.msgT = T.t; }
 
   function layout() {
@@ -26,43 +33,71 @@
     const pw = Math.max(110, Math.min(170, Math.round(W * 0.34)));
     const prev = { x: x0, y: 28, w: pw, h: H - 28 - 8 - G.safeB };
     const panel = { x: x0 + pw + 8, y: 28, w: x1 - (x0 + pw + 8), h: H - 28 - 8 - G.safeB };
-    const tw = Math.floor((panel.w - 8) / 3);
-    const tabs = ['color', 'armas', 'vuelo'].map((id, i) => ({ id, x: panel.x + i * (tw + 4), y: panel.y, w: tw, h: 17, label: id === 'color' ? 'COLOR' : id === 'armas' ? 'ARMAS' : 'VUELO' }));
+    const ids = ['color', 'estilo', 'armas', 'vuelo'], names = ['COLOR', 'ESTILO', 'ARMAS', 'VUELO'];
+    const tw = Math.floor((panel.w - 9) / 4);
+    const tabs = ids.map((id, i) => ({ id, x: panel.x + i * (tw + 3), y: panel.y, w: tw, h: 17, label: names[i] }));
     const arrows = { l: { x: prev.x + 3, y: prev.y + prev.h - 22, w: 16, h: 16, label: '◄' }, r: { x: prev.x + prev.w - 19, y: prev.y + prev.h - 22, w: 16, h: 16, label: '►' } };
     return { W, H, prev, panel, tabs, arrows, cy: panel.y + 24 };
   }
+  // pestaña COLOR: tres filas de muestras (cuerpo, luces, detalles)
   function swatches(L) {
-    const out = [], sz = 15, gap = 4, per = Math.max(4, Math.floor((L.panel.w - 4) / (sz + gap)));
-    let y = L.cy + 10;
-    G.MAINPALS.forEach((p, i) => out.push({ kind: 'm', i, x: L.panel.x + 2 + (i % per) * (sz + gap), y: y + Math.floor(i / per) * (sz + gap), w: sz, h: sz }));
-    y += Math.ceil(G.MAINPALS.length / per) * (sz + gap) + 14;
-    G.ACCPALS.forEach((p, i) => out.push({ kind: 'a', i, x: L.panel.x + 2 + (i % per) * (sz + gap), y: y + Math.floor(i / per) * (sz + gap), w: sz, h: sz }));
-    return { list: out, accY: y - 10 };
+    const out = [], sz = 14, gap = 3, per = Math.max(4, Math.floor((L.panel.w - 4) / (sz + gap)));
+    const groups = [['m', 0, G.MAINPALS], ['a', 1, G.ACCPALS], ['d', 2, G.SECPALS]];
+    let y = L.cy;
+    const labels = [];
+    for (const [kind, idx, pals] of groups) {
+      labels.push({ idx, y });
+      y += 10;
+      pals.forEach((p, i) => out.push({ kind, idx, i, x: L.panel.x + 2 + (i % per) * (sz + gap), y: y + Math.floor(i / per) * (sz + gap), w: sz, h: sz }));
+      y += Math.ceil(pals.length / per) * (sz + gap) + 6;
+    }
+    return { list: out, labels };
+  }
+  // pestañas ESTILO y VUELO: filas con ◄ valor ►
+  function cyclers(L) {
+    const rows = T.tab === 'estilo'
+      ? [['ACCESORIO', 3, G.HATS], ['EMBLEMA', 4, G.EMBLEMS], ['DIBUJO', 5, G.PATTERNS]]
+      : [['ESTELA', 6, G.TRAILS.map((t) => t.name)]];
+    const y0 = T.tab === 'estilo' ? L.cy : L.cy + 96;
+    return rows.map(([label, idx, names], r) => {
+      const y = y0 + r * 30;
+      return { label, idx, names, y, l: { x: L.panel.x, y: y + 9, w: 18, h: 16, label: '◄' }, r: { x: L.panel.x + L.panel.w - 18, y: y + 9, w: 18, h: 16, label: '►' } };
+    });
   }
   function weaponRows(L) {
     const rh = Math.min(22, Math.floor((L.panel.h - 30) / G.WEAPONS.length) - 3);
     return G.WEAPONS.map((w, i) => ({ w, x: L.panel.x, y: L.cy + i * (rh + 3), wd: L.panel.w, h: rh }));
   }
-  function flyBtn(L) { const w = Math.min(150, L.panel.w); return { x: L.panel.x + Math.round((L.panel.w - w) / 2), y: L.cy + 70, w, h: 20, label: '' }; }
+  function flyBtn(L) { const w = Math.min(150, L.panel.w); return { x: L.panel.x + Math.round((L.panel.w - w) / 2), y: L.cy + 66, w, h: 20, label: '' }; }
+  function stepRobot(d) {
+    const n = G.PLAYABLE.length;
+    let v = T.v;
+    for (let i = 0; i < n; i++) { v = (v + d + n) % n; if (G.isUnlocked(v)) break; }
+    T.v = v; G.save.data.villain = v; G.save.write(); G.preload(G.villainId(v)); G.audio.sfx('sel');
+  }
 
   T.down = function (id, x, y) {
     const L = layout(), s = shop();
     if (G.inRect(x, y, { x: G.safeL + 6, y: 6 + G.safeT, w: 20, h: 14 }, 4)) { G.audio.sfx('back'); G.go('select'); return; }
     for (const t of L.tabs) if (G.inRect(x, y, t, 2)) { T.tab = t.id; G.audio.sfx('sel'); return; }
-    const nv = G.VILLAINS.length;
-    if (G.inRect(x, y, L.arrows.l, 4)) { T.v = (T.v + nv - 1) % nv; G.save.data.villain = T.v; G.save.write(); G.audio.sfx('sel'); return; }
-    if (G.inRect(x, y, L.arrows.r, 4)) { T.v = (T.v + 1) % nv; G.save.data.villain = T.v; G.save.write(); G.audio.sfx('sel'); return; }
-    const vid = G.VILLAINS[T.v];
+    if (G.inRect(x, y, L.arrows.l, 4)) { stepRobot(-1); return; }
+    if (G.inRect(x, y, L.arrows.r, 4)) { stepRobot(1); return; }
     if (T.tab === 'color') {
-      for (const sw of swatches(L).list) if (G.inRect(x, y, sw, 2)) {
-        const c = (s.colors[vid] || [0, 0]).slice();
-        if (sw.kind === 'm') c[0] = sw.i; else c[1] = sw.i;
-        s.colors[vid] = c; G.save.write(); G.audio.sfx('ok');
-        G.preload(G.villainId(T.v));
-        say(sw.kind === 'm' ? 'CUERPO: ' + G.MAINNAMES[sw.i] : 'LUCES: ' + G.ACCNAMES[sw.i], true);
-        return;
+      for (const sw of swatches(L).list) if (G.inRect(x, y, sw, 1)) {
+        setCustom(sw.idx, sw.i); G.audio.sfx('ok');
+        const names = sw.kind === 'm' ? G.MAINNAMES : sw.kind === 'a' ? G.ACCNAMES : G.SECNAMES;
+        say(names[sw.i], true); return;
       }
-    } else if (T.tab === 'armas') {
+    }
+    if (T.tab === 'estilo' || T.tab === 'vuelo') {
+      for (const c of cyclers(L)) {
+        const d = G.inRect(x, y, c.l, 4) ? -1 : G.inRect(x, y, c.r, 4) ? 1 : 0;
+        if (!d) continue;
+        const n = c.names.length, v = (custom()[c.idx] + d + n) % n;
+        setCustom(c.idx, v); G.audio.sfx('ok'); say(c.label + ': ' + c.names[v], true); T.anim = T.t; return;
+      }
+    }
+    if (T.tab === 'armas') {
       for (const r of weaponRows(L)) if (G.inRect(x, y, { x: r.x, y: r.y, w: r.wd, h: r.h }, 1)) {
         const w = r.w;
         if (s.weapons.indexOf(w.id) >= 0) { s.weapon = w.id; G.save.write(); G.audio.sfx('ok'); say(w.name + ' EQUIPADO', true); T.anim = T.t; }
@@ -70,20 +105,19 @@
         else { G.audio.sfx('back'); say('TE FALTAN ' + G.fmt(w.price - s.wallet) + ' PUNTOS', false); }
         return;
       }
-    } else if (T.tab === 'vuelo') {
-      if (G.inRect(x, y, flyBtn(L), 3)) {
-        const lv = s.flyLv;
-        if (lv >= 3) { say('VUELO AL MÁXIMO', true); return; }
-        const price = G.FLYPRICE[lv];
-        if (s.wallet >= price) { s.wallet -= price; s.flyLv = lv + 1; G.save.write(); G.audio.sfx('win'); say('¡VUELO NIVEL ' + (lv + 2) + '!', true); }
-        else { G.audio.sfx('back'); say('TE FALTAN ' + G.fmt(price - s.wallet) + ' PUNTOS', false); }
-      }
+    }
+    if (T.tab === 'vuelo' && G.inRect(x, y, flyBtn(L), 3)) {
+      const lv = s.flyLv;
+      if (lv >= 3) { say('VUELO AL MÁXIMO', true); return; }
+      const price = G.FLYPRICE[lv];
+      if (s.wallet >= price) { s.wallet -= price; s.flyLv = lv + 1; G.save.write(); G.audio.sfx('win'); say('¡VUELO NIVEL ' + (lv + 2) + '!', true); }
+      else { G.audio.sfx('back'); say('TE FALTAN ' + G.fmt(price - s.wallet) + ' PUNTOS', false); }
     }
   };
   T.key = function (k) { if (k === 'Escape') G.go('select'); };
 
   T.draw = function () {
-    const L = layout(), s = shop(), t = T.t, W = L.W;
+    const L = layout(), s = shop(), t = T.t, W = L.W, c = custom();
     R(0, 0, W, L.H, '#16102a');
     const off = Math.floor((t * 12) % 16);
     for (let y = -16 + off; y < L.H; y += 16) A(0, y, W, 1, '#2e2450', 0.6);
@@ -97,28 +131,50 @@
     const cx = P.x + Math.round(P.w / 2) - 4, fy = P.y + P.h - 32;
     ell(cx + 4, fy, 26, 4, '#000', 0.4);
     const shooting = T.tab === 'armas' && (t - T.anim) % 1.6 < 0.5;
-    const fr = shooting ? 'punch' : (T.tab === 'vuelo' ? 'fly' : (Math.floor(t * 2) % 2 ? 'idle1' : 'idle0'));
-    const lift = T.tab === 'vuelo' ? Math.round(10 + Math.sin(t * 3) * 3) : 0;
+    const flying = T.tab === 'vuelo';
+    const fr = shooting ? 'punch' : (flying ? 'fly' : (Math.floor(t * 2) % 2 ? 'idle1' : 'idle0'));
+    const lift = flying ? Math.round(12 + Math.sin(t * 3) * 3) : 0;
     G.drawSprite(vid, fr, 1, cx, fy - lift);
-    if (T.tab === 'vuelo') for (const dx of [-7, 8]) { const f = Math.floor(t * 14) % 3; R(cx + dx - 2, fy - lift + 6, 5, 4 + f, '#ffc23a'); R(cx + dx - 1, fy - lift + 6, 3, 2 + f, '#fff4b0'); }
+    if (flying) {
+      const tc = G.TRAILS[c[6] || 0].c, f = Math.floor(t * 14) % 3;
+      for (const dx of [-7, 8]) { R(cx + dx - 2, fy - lift + 6, 5, 5 + f, tc[2]); R(cx + dx - 1, fy - lift + 6, 3, 3 + f, tc[1]); Px(cx + dx, fy - lift + 6, tc[0]); }
+    }
     if (shooting) drawShot(s.weapon, cx + 34, fy - 66, (t - T.anim) % 1.6, sp);
     G.text(sp.name, P.x + P.w / 2, P.y + P.h - 18, { c: '#ffffff', o: '#000', al: 'c' });
     G.button(L.arrows.l, false); G.button(L.arrows.r, false);
-    // pestañas
     for (const tb of L.tabs) G.button(tb, T.tab === tb.id);
     const pnl = L.panel;
     if (T.tab === 'color') {
-      const sw = swatches(L), c = s.colors[G.VILLAINS[T.v]] || [0, 0];
-      G.text('CUERPO: ' + G.MAINNAMES[c[0]], pnl.x + 2, L.cy, { c: '#c8bce0', o: '#000' });
-      G.text('LUCES: ' + G.ACCNAMES[c[1]], pnl.x + 2, sw.accY, { c: '#c8bce0', o: '#000' });
-      const base = G.ROB[G.VILLAINS[T.v]];
+      const sw = swatches(L), base = G.ROB[baseId()];
+      const lab = ['CUERPO: ' + G.MAINNAMES[c[0]], 'LUCES: ' + G.ACCNAMES[c[1]], 'DETALLES: ' + G.SECNAMES[c[2]]];
+      sw.labels.forEach((l, i) => G.text(lab[i], pnl.x + 2, l.y, { c: '#c8bce0', o: '#000' }));
       for (const b of sw.list) {
-        const pal = b.kind === 'm' ? (G.MAINPALS[b.i] || base.main) : (G.ACCPALS[b.i] || base.acc);
-        const on = (b.kind === 'm' ? c[0] : c[1]) === b.i;
+        const pals = b.kind === 'm' ? G.MAINPALS : b.kind === 'a' ? G.ACCPALS : G.SECPALS;
+        const pal = pals[b.i] || (b.kind === 'm' ? base.main : b.kind === 'a' ? base.acc : base.sec);
+        const on = c[b.idx] === b.i;
         R(b.x - 2, b.y - 2, b.w + 4, b.h + 4, on ? '#ffd23a' : '#000');
         R(b.x - 1, b.y - 1, b.w + 2, b.h + 2, '#000');
         R(b.x, b.y, b.w, b.h, pal.b); R(b.x, b.y, b.w, 4, pal.l); R(b.x, b.y + b.h - 4, b.w, 4, pal.d);
-        if (b.i === 0) R(b.x + 5, b.y + 6, 5, 3, '#ffffff');
+        if (b.i === 0) R(b.x + 4, b.y + 5, 6, 3, '#ffffff');
+      }
+    } else if (T.tab === 'estilo' || T.tab === 'vuelo') {
+      if (T.tab === 'vuelo') {
+        const lv = s.flyLv, secs = 5 + G.ROB[baseId()].stats.fly + lv * 3;
+        G.text('PODER DE VUELO', pnl.x + pnl.w / 2, L.cy, { c: '#ffffff', o: '#000', al: 'c' });
+        const segW = Math.floor((pnl.w - 20) / 4);
+        for (let i = 0; i < 4; i++) { const x = pnl.x + 10 + i * segW; R(x, L.cy + 12, segW - 4, 12, '#000'); R(x + 1, L.cy + 13, segW - 6, 10, i <= lv ? '#7ec8ff' : '#2a2442'); if (i <= lv) R(x + 1, L.cy + 13, segW - 6, 3, '#d8f0ff'); }
+        G.text('NIVEL ' + (lv + 1) + ' DE 4 · VUELAS ' + secs + ' S', pnl.x + pnl.w / 2, L.cy + 30, { c: '#7ec8ff', o: '#000', al: 'c' });
+        const b = flyBtn(L); b.label = lv >= 3 ? 'AL MÁXIMO' : 'MEJORAR · ' + G.fmt(G.FLYPRICE[lv]);
+        G.button(b, lv < 3 && s.wallet >= G.FLYPRICE[lv]);
+      }
+      for (const cy of cyclers(L)) {
+        G.text(cy.label, pnl.x + 2, cy.y, { c: '#c8bce0', o: '#000' });
+        G.button(cy.l, false); G.button(cy.r, false);
+        const bx = cy.l.x + cy.l.w + 4, bw = cy.r.x - 4 - bx;
+        R(bx, cy.y + 9, bw, 16, '#000'); R(bx + 1, cy.y + 10, bw - 2, 14, '#2a2442');
+        const val = cy.names[c[cy.idx]];
+        const col = cy.idx === 6 ? G.TRAILS[c[6]].c[2] : (c[cy.idx] ? '#ffe266' : '#a898c8');
+        G.text(val, bx + bw / 2, cy.y + 14, { c: col, al: 'c' });
       }
     } else if (T.tab === 'armas') {
       for (const r of weaponRows(L)) {
@@ -130,20 +186,10 @@
         G.text(st, r.x + r.wd - 5, r.y + Math.round(r.h / 2) - 3, { c: stc, al: 'r' });
         if (r.wd > 200) for (let i = 0; i < 5; i++) { const px = r.x + r.wd - 50 - G.textW(st, 1) - 30 + i * 5; R(px, r.y + Math.round(r.h / 2) - 2, 4, 5, '#000'); R(px, r.y + Math.round(r.h / 2) - 2, 3, 4, i < w.pow ? '#ff9a3a' : '#3a2e52'); }
       }
-    } else {
-      const lv = s.flyLv, secs = 5 + G.ROB[G.VILLAINS[T.v]].stats.fly + lv * 3;
-      G.text('PODER DE VUELO', pnl.x + pnl.w / 2, L.cy, { c: '#ffffff', o: '#000', al: 'c' });
-      const segW = Math.floor((pnl.w - 20) / 4);
-      for (let i = 0; i < 4; i++) { const x = pnl.x + 10 + i * segW; R(x, L.cy + 14, segW - 4, 14, '#000'); R(x + 1, L.cy + 15, segW - 6, 12, i <= lv ? '#7ec8ff' : '#2a2442'); if (i <= lv) R(x + 1, L.cy + 15, segW - 6, 3, '#d8f0ff'); }
-      G.text('NIVEL ' + (lv + 1) + ' DE 4', pnl.x + pnl.w / 2, L.cy + 34, { c: '#7ec8ff', o: '#000', al: 'c' });
-      G.text('VUELAS ' + secs + ' SEGUNDOS', pnl.x + pnl.w / 2, L.cy + 46, { c: '#c8bce0', o: '#000', al: 'c' });
-      G.text('Y MÁS RÁPIDO', pnl.x + pnl.w / 2, L.cy + 56, { c: '#c8bce0', o: '#000', al: 'c' });
-      const b = flyBtn(L); b.label = lv >= 3 ? 'AL MÁXIMO' : 'MEJORAR · ' + G.fmt(G.FLYPRICE[lv]);
-      G.button(b, lv < 3 && s.wallet >= G.FLYPRICE[lv]);
     }
     if (T.msg && t - T.msgT < 2.5) G.text(T.msg, pnl.x + pnl.w / 2, L.H - 16 - G.safeB, { c: T.msgGood ? '#5effc0' : '#ff7a6a', o: '#000', al: 'c' });
   };
-  // dibujo de cada arma (también lo usa el combate)
+  const Px = G.Px;
   function drawShot(w, x, y, k, sp) {
     const c = sp.acc, d = Math.round(k * 120);
     if (w === 'misiles') { for (let i = -1; i <= 1; i++) { R(x + d - 4, y + i * 6 - 1, 9, 3, '#1c1a22'); R(x + d - 3, y + i * 6, 7, 1, '#e8e8f0'); R(x + d - 7, y + i * 6 - 1, 3, 3, '#ffc23a'); } }

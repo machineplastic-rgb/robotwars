@@ -58,24 +58,44 @@
   G.MAINNAMES = ['ORIGINAL', 'ROJO', 'AZUL', 'VERDE', 'NARANJA', 'NEGRO', 'BLANCO', 'DORADO', 'ROSA', 'MORADO', 'CIAN'];
   G.ACCPALS = [null, PAL.green, PAL.cyan, PAL.magenta, PAL.yellowg, P('#2a0404', '#b01a1a', '#ff3a3a', '#ff9a9a', '#ffffff'), PAL.orange, P('#1a1a22', '#b8bcc8', '#f4f6fa', '#ffffff', '#ffffff')];
   G.ACCNAMES = ['ORIGINAL', 'VERDE', 'CIAN', 'ROSA', 'AMARILLO', 'ROJO', 'NARANJA', 'BLANCO'];
-  G.customId = function (id, m, a) {
-    m = m || 0; a = a || 0;
-    if (!m && !a) return id;
-    const cid = id + '~' + m + '~' + a;
+  G.SECPALS = [null, PAL.gunm, PAL.black, PAL.white, PAL.gold, PAL.red, P('#05081e', '#1a2e8c', '#2e52d2', '#5a84f4', '#a8c4ff'), PAL.purple, PAL.chrome];
+  G.SECNAMES = ['ORIGINAL', 'GRIS', 'NEGRO', 'BLANCO', 'DORADO', 'ROJO', 'AZUL', 'MORADO', 'PLATA'];
+  G.HATS = ['NADA', 'CUERNOS', 'CORONA', 'ANTENA', 'CRESTA', 'GAFAS'];
+  G.EMBLEMS = ['NADA', 'ESTRELLA', 'RAYO', 'LLAMA', 'CORAZÓN', 'CALAVERA'];
+  G.PATTERNS = ['NADA', 'RAYAS', 'MANCHAS', 'LLAMAS'];
+  G.TRAILS = [
+    { name: 'FUEGO', c: ['#fff4b0', '#ffc23a', '#ff7a1a', '#d8341a'] },
+    { name: 'AZUL', c: ['#e8ffff', '#7ef0ff', '#2aa8ff', '#1a4ad8'] },
+    { name: 'VERDE', c: ['#f0ffe0', '#b8ff6a', '#4adc2a', '#1a8a1a'] },
+    { name: 'ROSA', c: ['#fff0fa', '#ff9ae0', '#ff3ab8', '#a01a7a'] },
+    { name: 'MORADO', c: ['#f4ecff', '#c49aff', '#8a52d8', '#4a1a8a'] },
+  ];
+  // colores guardados por robot: [cuerpo, luces, detalles, accesorio, emblema, dibujo, estela]
+  G.customId = function (id, c) {
+    c = c || [];
+    const k = [0, 1, 2, 3, 4, 5].map((i) => c[i] || 0);
+    if (k.every((v) => !v)) return id;
+    const cid = id + '~' + k.join('~');
     if (!G.ROB[cid]) {
-      const base = G.ROB[id];
-      G.ROB[cid] = Object.assign({}, base, { id: cid, main: m ? G.MAINPALS[m] : base.main, acc: a ? G.ACCPALS[a] : base.acc });
+      const b = G.ROB[id];
+      G.ROB[cid] = Object.assign({}, b, { id: cid, main: k[0] ? G.MAINPALS[k[0]] : b.main, acc: k[1] ? G.ACCPALS[k[1]] : b.acc, sec: k[2] ? G.SECPALS[k[2]] : b.sec, hat: k[3], emb: k[4], pat: k[5] });
     }
     return cid;
   };
-  // id del villano con los colores que tenga guardados
-  G.villainId = function (idx) {
-    const id = G.VILLAINS[idx || 0];
-    const c = (G.save.data.shop.colors || {})[id] || [0, 0];
-    return G.customId(id, c[0], c[1]);
+  // robots que se pueden elegir: los 5 villanos y los rivales ya derrotados (G.PLAYABLE se define tras G.HEROES)
+  G.isUnlocked = function (idx) {
+    if (idx < G.VILLAINS.length) return true;
+    const si = G.STAGES.findIndex((s) => s.hero === G.PLAYABLE[idx]);
+    return !!G.save.data.beaten[si];
   };
+  G.villainId = function (idx) {
+    const id = G.PLAYABLE[idx || 0] || G.VILLAINS[0];
+    return G.customId(id, (G.save.data.shop.colors || {})[id]);
+  };
+  G.trailOf = function (idx) { const c = (G.save.data.shop.colors || {})[G.PLAYABLE[idx || 0]] || []; return c[6] || 0; };
   G.VILLAINS = ['demoledor', 'tornado', 'triturador', 'veneno', 'furia'];
   G.HEROES = ['voltar', 'blazer', 'sahara', 'acero', 'kodiak', 'astron'];
+  G.PLAYABLE = G.VILLAINS.concat(G.HEROES);
   G.VEHNAME = { tanque: 'TANQUE', avion: 'AVIÓN', camion: 'CAMIÓN', coche: 'COCHE' };
 
   const SW = 132, SH = 132, OX = 56, OY = 128;
@@ -182,7 +202,7 @@
     for (const [sx, lg] of [[-16, L.lL], [4, L.lR]]) {
       const dx = lg.dx, lf = lg.lift;
       part(cx + sx + dx, fy - 45, 12, 15, th);
-      part(cx + sx - 3 + dx, fy - 32 - lf, 15, 26, m, 2); legDetail(s, cx + sx - 3 + dx, fy - 32 - lf, 15, 26, sx < 0);
+      part(cx + sx - 3 + dx, fy - 32 - lf, 15, 26, m, 2); pattern(s, cx + sx - 3 + dx, fy - 32 - lf, 15, 26); legDetail(s, cx + sx - 3 + dx, fy - 32 - lf, 15, 26, sx < 0);
       part(cx + sx - 6 + dx, fy - 8 - lf, 19, 8, k, 2); feetX(s, cx + sx - 6 + dx, fy - 8 - lf, 19, 8, sx < 0);
     }
   }
@@ -195,10 +215,66 @@
       Px(x - 3, y - 51, b.o); Px(x + 2, y - 51, b.o); Px(x - 3, y - 48, b.o); R(x - 2, y - 47, 4, 1, b.o); Px(x + 2, y - 48, b.o);
     } else { part(x - 6, y - 54, 12, 10, m, 2); R(x - 2, y - 51, 4, 3, a.b); Px(x - 2, y - 51, a.l); }
   }
+  // dibujo de pintura (taller): rayas, manchas o llamas
+  function pattern(s, x, y, w, h) {
+    const p = s.pat, a = s.acc;
+    if (!p) return;
+    if (p === 1) {
+      if (w > 20) { R(x + 4, y + 3, 3, h - 6, a.b); R(x + w - 7, y + 3, 3, h - 6, a.b); }
+      else { R(x + Math.floor(w / 2) - 1, y + 3, 3, h - 6, a.b); }
+    } else if (p === 2) {
+      const rr = G.rng(w * 31 + h * 7);
+      for (let i = 0; i < (w * h) / 36; i++) R(x + 2 + rr() * (w - 7), y + 2 + rr() * (h - 6), 2 + rr() * 3, 2 + rr() * 2, i % 2 ? s.main.d : s.sec.b);
+    } else if (p === 3) {
+      for (let i = 0; i < w - 2; i++) {
+        const hh = Math.max(1, Math.round(h * 0.45 * (0.45 + 0.55 * Math.abs(Math.sin(i * 0.8)))));
+        R(x + 1 + i, y + h - 2 - hh, 1, hh, '#ff7a1a'); R(x + 1 + i, y + h - 2 - Math.round(hh * 0.5), 1, Math.round(hh * 0.5), '#ffd23a');
+      }
+    }
+  }
+  // emblema de 7x7 en las hombreras (taller)
+  const EMB = {
+    1: ['...#...', '...#...', '#######', '.#####.', '..###..', '.##.##.', '#.....#'],
+    2: ['...##..', '..##...', '.##....', '#######', '....##.', '...##..', '..##...'],
+    3: ['...#...', '..##...', '..###..', '.#.###.', '.#####.', '#######', '.#####.'],
+    4: ['.##.##.', '#######', '#######', '.#####.', '..###..', '...#...', '.......'],
+    5: ['.#####.', '#######', '#..#..#', '#######', '.##.##.', '.#####.', '.#.#.#.'],
+  };
+  const EMBC = { 1: '#ffe266', 2: '#ffd23a', 3: '#ff7a1a', 4: '#ff3a5a', 5: '#f4f0e8' };
+  function emblem(s, cx, cy) {
+    const e = EMB[s.emb]; if (!e) return;
+    for (let r = 0; r < 7; r++) for (let q = 0; q < 7; q++) if (e[r][q] === '#') R(cx - 4 + q, cy - 3 + r, 3, 3, OUT);
+    for (let r = 0; r < 7; r++) for (let q = 0; q < 7; q++) if (e[r][q] === '#') Px(cx - 3 + q, cy - 3 + r, EMBC[s.emb]);
+  }
+  // accesorio en la cabeza (taller)
+  function hat(s, hx, hy) {
+    const a = s.acc;
+    switch (s.hat) {
+      case 1:
+        for (const d of [-1, 1]) { polyO([[hx + d * 6, hy - 97], [hx + d * 13, hy - 101], [hx + d * 16, hy - 111], [hx + d * 10, hy - 104], [hx + d * 3, hy - 97]], '#f0e8d8', OUT); G.line(hx + d * 8, hy - 99, hx + d * 13, hy - 104, '#c8bca8'); }
+        break;
+      case 2:
+        polyO([[hx - 9, hy - 97], [hx - 10, hy - 106], [hx - 5, hy - 101], [hx, hy - 109], [hx + 5, hy - 101], [hx + 10, hy - 106], [hx + 9, hy - 97]], '#e8b830', OUT);
+        R(hx - 8, hy - 99, 17, 2, '#a87810'); Px(hx - 5, hy - 101, '#ff3a3a'); Px(hx, hy - 104, '#40c8ff'); Px(hx + 5, hy - 101, '#ff3a3a');
+        break;
+      case 3:
+        G.line(hx + 4, hy - 97, hx + 8, hy - 112, OUT); G.line(hx + 5, hy - 97, hx + 9, hy - 112, '#b8bcc8');
+        ell(hx + 9, hy - 114, 3, 3, OUT); ell(hx + 9, hy - 114, 2, 2, a.b); Px(hx + 8, hy - 115, '#ffffff');
+        break;
+      case 4:
+        for (let i = 0; i < 4; i++) polyO([[hx - 6 + i * 4, hy - 97], [hx - 4 + i * 4, hy - 106 - (i % 2) * 3], [hx - 2 + i * 4, hy - 97]], '#ff3a3a', OUT);
+        break;
+      case 5:
+        R(hx - 10, hy - 93, 21, 6, OUT); R(hx - 9, hy - 92, 8, 4, '#14141a'); R(hx + 1, hy - 92, 8, 4, '#14141a');
+        Px(hx - 7, hy - 91, '#ffffff'); Px(hx + 3, hy - 91, '#ffffff'); R(hx - 1, hy - 91, 2, 1, OUT);
+        break;
+    }
+  }
   function torso(s, ox, oy) {
     const m = s.main, k = s.sec, a = s.acc;
     part(ox - 21, oy - 79, 42, 27, m, 4);
     R(ox - 19, oy - 74, 6, 20, m.l); R(ox + 13, oy - 74, 6, 20, m.d);
+    pattern(s, ox - 21, oy - 79, 42, 27);
     switch (s.chest) {
       case 'core':
         A(ox - 10, oy - 76, 20, 15, a.b, 0.22); part(ox - 7, oy - 73, 14, 10, a, 2);
@@ -399,8 +475,10 @@
     R(ox - 6, oy - 83, 12, 5, OUT); R(ox - 5, oy - 82, 10, 3, s.sec.b);
     if (L.fa !== 'wind') frontArm(s, L.fa, ox, oy);
     shoulders(s, ox, oy);
+    if (s.emb) { emblem(s, ox - 28, oy - 74); emblem(s, ox + 28, oy - 74); }
     if (L.fa === 'wind') frontArm(s, L.fa, ox, oy);
     head(s, ox + L.hx, oy + L.hy);
+    if (s.hat) hat(s, ox + L.hx, oy + L.hy);
   }
 
   // ---------- vehículos (miran a la derecha) ----------

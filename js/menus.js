@@ -52,35 +52,64 @@
 
   // ---------- elegir villano ----------
   const SEL = G.scenes.select = {};
-  SEL.enter = function () { SEL.sel = G.save.data.villain || 0; G.audio.play('select'); G.VILLAINS.forEach((v, i) => G.preload(G.villainId(i))); };
+  SEL.enter = function () {
+    SEL.sel = G.save.data.villain || 0; if (!G.isUnlocked(SEL.sel)) SEL.sel = 0;
+    SEL.tab = SEL.sel < G.VILLAINS.length ? 0 : 1;
+    G.audio.play('select'); G.PLAYABLE.forEach((v, i) => { if (G.isUnlocked(i)) G.preload(G.villainId(i)); });
+  };
   function tallerBtn() { const b = goBtn(); return { x: b.x - 76, y: b.y, w: 68, h: 20, label: 'TALLER' }; }
+  function selTabs() {
+    const W = G.W, w = 92, unl = G.HEROES.filter((h, i) => G.isUnlocked(G.VILLAINS.length + i)).length;
+    return [{ id: 0, x: Math.round(W / 2) - w - 3, y: 26, w, h: 15, label: 'VILLANOS' }, { id: 1, x: Math.round(W / 2) + 3, y: 26, w, h: 15, label: 'RIVALES ' + unl + '/' + G.HEROES.length }];
+  }
   function cards() {
-    const W = G.W, H = G.H, n = G.VILLAINS.length, gap = 4, x0 = G.safeL + 6, x1 = W - G.safeR - 6;
-    const cw = Math.floor((x1 - x0 - gap * (n - 1)) / n), top = 30, ch = H - top - 34;
-    return G.VILLAINS.map((v, i) => ({ x: x0 + i * (cw + gap), y: top, w: cw, h: ch, v, i }));
+    const W = G.W, H = G.H, nv = G.VILLAINS.length;
+    const idxs = SEL.tab === 0 ? G.VILLAINS.map((v, i) => i) : G.HEROES.map((v, i) => nv + i);
+    const n = idxs.length, gap = 4, x0 = G.safeL + 6, x1 = W - G.safeR - 6;
+    const cw = Math.floor((x1 - x0 - gap * (n - 1)) / n), top = 46, ch = H - top - 34;
+    return idxs.map((i, k) => ({ x: x0 + k * (cw + gap), y: top, w: cw, h: ch, v: G.PLAYABLE[i], i, locked: !G.isUnlocked(i) }));
   }
   function goBtn() { const W = G.W, H = G.H, w = 120; return { x: Math.round(W / 2 - w / 2), y: H - 26 - G.safeB, w, h: 20, label: '¡A DESTRUIR!' }; }
   SEL.down = function (id, x, y) {
     if (G.inRect(x, y, backBtn(), 4)) { G.audio.sfx('back'); G.go('title'); return; }
     if (G.inRect(x, y, goBtn(), 3)) { pick(); return; }
     if (G.inRect(x, y, tallerBtn(), 3)) { G.save.data.villain = SEL.sel; G.save.write(); G.audio.sfx('ok'); G.go('taller'); return; }
-    for (const c of cards()) if (G.inRect(x, y, c)) { if (SEL.sel === c.i && SEL.t > 0.3) { pick(); return; } SEL.sel = c.i; SEL.selT = SEL.t; G.audio.sfx('sel'); }
+    for (const tb of selTabs()) if (G.inRect(x, y, tb, 2)) { SEL.tab = tb.id; G.audio.sfx('sel'); return; }
+    for (const c of cards()) if (G.inRect(x, y, c)) {
+      if (c.locked) { G.audio.sfx('back'); SEL.lockMsg = c.i; SEL.lockT = SEL.t; return; }
+      if (SEL.sel === c.i && SEL.t > 0.3) { pick(); return; }
+      SEL.sel = c.i; SEL.selT = SEL.t; G.audio.sfx('sel');
+    }
   };
   function pick() { G.save.data.villain = SEL.sel; G.save.write(); G.audio.sfx('ok'); G.go('map'); }
   SEL.key = function (k) {
-    const n = G.VILLAINS.length;
-    if (k === 'ArrowLeft' || k === 'KeyA') { SEL.sel = (SEL.sel + n - 1) % n; G.audio.sfx('sel'); }
-    if (k === 'ArrowRight' || k === 'KeyD') { SEL.sel = (SEL.sel + 1) % n; G.audio.sfx('sel'); }
+    const cs = cards().filter((c) => !c.locked), n = cs.length;
+    let p = cs.findIndex((c) => c.i === SEL.sel); if (p < 0) p = 0;
+    if (k === 'ArrowLeft' || k === 'KeyA') { SEL.sel = cs[(p + n - 1) % n].i; G.audio.sfx('sel'); }
+    if (k === 'ArrowRight' || k === 'KeyD') { SEL.sel = cs[(p + 1) % n].i; G.audio.sfx('sel'); }
+    if (k === 'Tab') SEL.tab = 1 - SEL.tab;
     if (k === 'Enter' || k === 'Space') pick();
     if (k === 'Escape') G.go('title');
   };
   SEL.draw = function () {
     const W = G.W, H = G.H, t = SEL.t;
     bgGrid(t, '#1a1030', '#3a2a5a');
-    G.text('ELIGE TU VILLANO', W / 2, 9 + G.safeT, { s: 2, c: GOLD, o: '#000', al: 'c' });
+    G.text('ELIGE TU ROBOT', W / 2, 7 + G.safeT, { s: 2, c: GOLD, o: '#000', al: 'c' });
     G.button(backBtn(), false);
+    for (const tb of selTabs()) G.button(tb, SEL.tab === tb.id);
     for (const c of cards()) {
       const sp = G.ROB[c.v], on = SEL.sel === c.i;
+      if (c.locked) {
+        R(c.x, c.y, c.w, c.h, '#00000066'); R(c.x + 1, c.y + 1, c.w - 2, c.h - 2, '#1a1228');
+        const cx = c.x + Math.round(c.w / 2) - 4, fy = c.y + Math.min(c.h - 52, 128);
+        G.drawSprite(c.v, 'idle0', 1, cx, fy, 1, '#0a0612');
+        G.text('?', c.x + c.w / 2, fy - 64, { s: 3, c: '#5a4a7a', al: 'c' });
+        const st = G.STAGES.find((s) => s.hero === c.v);
+        G.text('GÁNALE EN', c.x + c.w / 2, fy + 6, { c: '#a898c8', al: 'c' });
+        G.text(st ? st.name : '', c.x + c.w / 2, fy + 16, { c: '#ffb020', al: 'c' });
+        if (SEL.lockMsg === c.i && t - SEL.lockT < 1.5) { R(c.x + 2, c.y + 4, c.w - 4, 12, '#000'); G.text('BLOQUEADO', c.x + c.w / 2, c.y + 7, { c: '#ff7a6a', al: 'c' }); }
+        continue;
+      }
       R(c.x, c.y, c.w, c.h, on ? '#000' : '#00000066');
       R(c.x + 1, c.y + 1, c.w - 2, c.h - 2, on ? '#3a2a5a' : '#241838');
       if (on) { const pulse = Math.floor(t * 4) % 2 ? '#ffd23a' : '#ffb020'; R(c.x, c.y, c.w, 1, pulse); R(c.x, c.y + c.h - 1, c.w, 1, pulse); R(c.x, c.y, 1, c.h, pulse); R(c.x + c.w - 1, c.y, 1, c.h, pulse); }
@@ -105,7 +134,8 @@
     }
     const b = goBtn(); G.button(b, true);
     G.button(tallerBtn(), false);
-    G.text(G.ROB[G.VILLAINS[SEL.sel]].desc, W / 2, b.y - 9, { c: '#ffffff', o: '#000', al: 'c' });
+    const sel = G.ROB[G.PLAYABLE[SEL.sel]];
+    G.text(sel.desc || (sel.name + ' · ' + G.VEHNAME[sel.veh]), W / 2, b.y - 9, { c: '#ffffff', o: '#000', al: 'c' });
     G.text('PUNTOS ' + G.fmt(G.save.data.shop.wallet), W - G.safeR - 6, 11 + G.safeT, { c: '#ffe266', o: '#000', al: 'r' });
   };
 
@@ -163,7 +193,7 @@
   const VS = G.scenes.vs = {};
   VS.enter = function () {
     const r = G.run; VS.stage = r.order[r.idx]; VS.level = r.idx + 1;
-    VS.v = G.villainId(r.villain); VS.h = G.STAGES[VS.stage].hero;
+    VS.v = G.villainId(r.villain); VS.h = G.rivalFor(VS.stage, r.villain);
     G.preload(VS.v); G.preload(VS.h);
     G.audio.play(G.STAGES[VS.stage].music); G.audio.sfx('fight');
   };
@@ -199,6 +229,9 @@
     const r = G.run;
     p.earned = Math.max(0, Math.round(p.earned || 0));
     G.save.data.shop.wallet += p.earned; G.save.write();
+    // ¿se desbloquea el rival de este lugar?
+    const hid = G.STAGES[p.stage].hero;
+    RES.unlocked = p.win && !G.save.data.beaten[p.stage] ? hid : null;
     if (p.win) {
       r.score = p.score;
       G.save.data.beaten[p.stage] = 1;
@@ -241,6 +274,11 @@
       line('BONUS', '+' + p.bonus, '#ffe266');
       line('PUNTOS', G.pad(p.score, 7), '#ffe266');
       line('PARA EL TALLER', '+' + G.fmt(p.earned), '#5effc0');
+      if (RES.unlocked) {
+        const blink = Math.floor(t * 3) % 2 ? '#ffe266' : '#ffffff';
+        G.text('¡' + G.ROB[RES.unlocked].name + ' DESBLOQUEADO!', x, y + 4, { c: blink, o: '#000', al: 'c' });
+        G.text('YA PUEDES ELEGIRLO', x, y + 14, { c: '#c8bce0', o: '#000', al: 'c' });
+      }
     } else {
       G.text(p.timeup ? 'SE ACABÓ EL TIEMPO' : G.ROB[p.hero].name + ' TE HA VENCIDO', x, 48, { c: '#ff9a8a', o: '#000', al: 'c' }); y = 64;
       line('CIUDAD DESTRUIDA', p.pct + '%', '#ff9a3a');
