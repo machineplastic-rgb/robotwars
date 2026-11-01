@@ -1,5 +1,5 @@
-// Service worker: el juego funciona sin conexión tras la primera carga.
-const CACHE_NAME = 'robotwars-v5';
+// Service worker: siempre carga primero lo último de internet; la copia guardada solo se usa sin conexión.
+const CACHE_NAME = 'robotwars-v6';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest',
   'js/core.js', 'js/font.js', 'js/audio.js', 'js/robots.js', 'js/stages.js', 'js/fight.js', 'js/shop.js', 'js/menus.js', 'js/main.js',
@@ -7,7 +7,8 @@ const SHELL = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE_NAME).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // cache: 'reload' = descarga fresca, sin usar la caché del navegador
+  e.waitUntil(caches.open(CACHE_NAME).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', (e) => {
   e.waitUntil(
@@ -21,11 +22,13 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
-  // primero caché, y se actualiza en segundo plano
+  const fresh = req.mode === 'navigate' ? new Request(req.url, { cache: 'no-cache' }) : new Request(req, { cache: 'no-cache' });
   e.respondWith(
-    caches.open(CACHE_NAME).then((c) => c.match(req, { ignoreSearch: true }).then((hit) => {
-      const net = fetch(req).then((res) => { if (res && res.ok) c.put(req, res.clone()); return res; }).catch(() => hit);
-      return hit || net;
-    }))
+    fetch(fresh)
+      .then((res) => {
+        if (res && res.ok) { const copy = res.clone(); caches.open(CACHE_NAME).then((c) => c.put(req, copy)); }
+        return res;
+      })
+      .catch(() => caches.open(CACHE_NAME).then((c) => c.match(req, { ignoreSearch: true })))
   );
 });

@@ -16,6 +16,13 @@
   if (sim) G.simulate(sim);
   G.start();
   if ('serviceWorker' in navigator && /^https?:/.test(location.protocol) && !q.get('nosw')) {
-    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => { }));
+    // cuando llega una versión nueva, la página se recarga sola una vez
+    const hadController = !!navigator.serviceWorker.controller;
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController || refreshing) return;
+      refreshing = true; location.reload();
+    });
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((r) => r.update()).catch(() => { }));
   }
 })(window.G);
